@@ -1,0 +1,10 @@
+node_modules
+.pnpm-store
+.pnpm-home
+.turbo
+.next
+.git
+.cache
+coverage
+apps/*/dist
+packages/*/dist

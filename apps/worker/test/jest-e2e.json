@@ -1,0 +1,28 @@
+{
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "rootDir": ".",
+  "testEnvironment": "node",
+  "testRegex": ".*\\.e2e-spec\\.ts$",
+  "moduleNameMapper": {
+    "^@repo/config$": "<rootDir>/../../../packages/config/src/index.ts",
+    "^@repo/shared$": "<rootDir>/../../../packages/shared/src/index.ts",
+    "^@repo/queue-contracts$": "<rootDir>/../../../packages/queue-contracts/src/index.ts",
+    "^@repo/observability$": "<rootDir>/../../../packages/observability/src/index.ts",
+    "^@repo/scraper$": "<rootDir>/../../../packages/scraper/src/index.ts"
+  },
+  "transform": {
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "useESM": false,
+        "tsconfig": {
+          "module": "commonjs",
+          "moduleResolution": "node",
+          "resolvePackageJsonExports": false,
+          "resolvePackageJsonImports": false
+        }
+      }
+    ]
+  },
+  "transformIgnorePatterns": []
+}

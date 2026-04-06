@@ -1,159 +1,137 @@
-# Turborepo starter
+# Crawlix Next
 
-This Turborepo starter is maintained by the Turborepo core team.
+Monorepo `pnpm` + Turborepo untuk fondasi Crawlix versi baru dengan Next.js dashboard, NestJS API, dan NestJS worker.
 
-## Using this example
+## Apps
 
-Run the following command:
+- `apps/web`: dashboard internal Next.js
+- `apps/api`: NestJS API untuk enqueue job dan baca status/result
+- `apps/worker`: NestJS worker untuk consume RabbitMQ dan memproses job
 
-```sh
-npx create-turbo@latest
+## Packages
+
+- `packages/config`: shared runtime config/env helper
+- `packages/shared`: helper umum lintas app
+- `packages/queue-contracts`: kontrak payload job/status/result
+- `packages/observability`: helper log/bootstrapping dasar
+
+## Local development
+
+1. Salin root [`.env.example`](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\.env.example) menjadi `.env` untuk workflow lokal standar.
+2. Jalankan infra lokal:
+   - `pnpm dev:infra`
+3. Jalankan aplikasi secara terpisah:
+   - `pnpm dev:api`
+   - `pnpm dev:worker`
+   - `pnpm dev:web`
+4. Buka:
+   - Dashboard: `http://localhost:3000`
+   - API: `http://localhost:3001/api`
+   - RabbitMQ UI: `http://localhost:15672`
+
+## Full docker runtime
+
+Gunakan satu command untuk menjalankan stack penuh:
+
+```bash
+pnpm docker:up
 ```
 
-## What's inside?
+Service yang dijalankan:
+- `web`
+- `api`
+- `worker`
+- `rabbitmq`
+- `redis`
 
-This Turborepo includes the following packages/apps:
+Untuk menghentikan:
 
-### Apps and Packages
-
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
-
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+```bash
+pnpm docker:down
 ```
 
-Without global `turbo`, use your package manager:
+## Health endpoints
 
-```sh
-cd my-turborepo
-npx turbo build
-yarn dlx turbo build
-pnpm exec turbo build
-```
+- Liveness API:
+  - `GET /api/health/live`
+- Readiness API:
+  - `GET /api/health/ready`
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Readiness akan memeriksa:
+- koneksi Redis
+- queue RabbitMQ
+- queue depth dan consumer count
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+## Current Phase
 
-```sh
-turbo build --filter=docs
-```
+Production foundation yang sudah aktif:
+- enqueue job via API key
+- dashboard admin dengan session/cookie
+- API key management dari dashboard
+- worker heartbeat aktif di Redis
+- retry queue dan DLQ di RabbitMQ
+- queue depth utama, retry, dan DLQ di dashboard
+- cancel dan retry action untuk operator
+- docker compose lokal dan compose production-oriented
+- integration/e2e test dasar untuk auth, jobs flow, dan retry/DLQ worker
 
-Without global `turbo`:
+## Env strategy
 
-```sh
-npx turbo build --filter=docs
-yarn exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+- Untuk workflow lokal normal dari root monorepo, cukup pakai root [`.env.example`](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\.env.example) menjadi `.env`.
+- Saya juga tambahkan contoh per app:
+  - [apps/api/.env.example](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\api\.env.example)
+  - [apps/worker/.env.example](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\worker\.env.example)
+  - [apps/web/.env.example](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\web\.env.example)
+- File per app ini berguna kalau nanti API, worker, dan web dijalankan atau dideploy terpisah.
+- Jadi jawabannya: tidak wajib membuat `.env` di setiap folder `apps`, tapi itu berguna untuk deployment terpisah atau local run per service.
 
-### Develop
+Env auth tambahan yang sekarang wajib untuk API production:
+- `DASHBOARD_ORIGIN`
+- `SESSION_SECRET`
+- `SESSION_COOKIE_NAME`
+- `SESSION_TTL_SECONDS`
+- `DASHBOARD_ADMIN_EMAIL`
+- `DASHBOARD_ADMIN_PASSWORD`
+- `API_KEY_PREFIX`
 
-To develop all apps and packages, run the following command:
+Env queue hardening tambahan:
+- `RABBITMQ_RETRY_QUEUE_NAME`
+- `RABBITMQ_DLQ_QUEUE_NAME`
+- `RABBITMQ_RETRY_DELAY_MS`
+- `RABBITMQ_MAX_DELIVERY_ATTEMPTS`
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+## Production hardening status
 
-```sh
-cd my-turborepo
-turbo dev
-```
+Yang sudah ada:
+- validasi config fail-fast saat bootstrap API dan worker
+- API liveness dan readiness endpoint
+- heartbeat worker aktif di Redis
+- queue depth main/retry/DLQ dan consumer count dari RabbitMQ
+- retry dan cancel action untuk job queued
+- session auth untuk dashboard internal
+- API key auth untuk client programmatic
+- endpoint admin untuk create/list/revoke API key
+- test e2e dasar untuk auth, key flow, enqueue, retry, cancel, dan worker retry/DLQ
+- docker compose healthcheck untuk `rabbitmq`, `redis`, `api`, dan `web`
+- graceful shutdown hook di API dan worker
 
-Without global `turbo`, use your package manager:
+Yang masih perlu sebelum saya sebut production-ready penuh untuk traffic besar:
+- test integration/e2e yang lebih lengkap dengan Redis/RabbitMQ nyata
+- finalisasi runtime Playwright/cloudscraper production
+- observability stack terpisah seperti Prometheus/Grafana/log aggregation
+- deployment manifest final untuk target nyata seperti ECS/Kubernetes
 
-```sh
-cd my-turborepo
-npx turbo dev
-yarn exec turbo dev
-pnpm exec turbo dev
-```
+## Deployment guide
 
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+Panduan deploy final ada di:
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+- [docs/deployment.md](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\docs\deployment.md)
+- [docker-compose.prod.yml](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\docker-compose.prod.yml)
 
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-yarn exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-yarn exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-yarn exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+Dokumen itu mencakup:
+- full Docker stack
+- `web`/`api` di Docker + worker di EC2 VM
+- worker horizontal multi-host
+- contoh `systemd` untuk worker
+- env yang wajib sama antar worker
+- rolling update dan health endpoint load balancer

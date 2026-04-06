@@ -2,6 +2,17 @@
 
 # Dependencies
 node_modules
+.cache
+.pnpm-home
+apps/src
+apps/test
+apps/.prettierrc
+apps/eslint.config.mjs
+apps/nest-cli.json
+apps/package.json
+apps/README.md
+apps/tsconfig.build.json
+apps/tsconfig.json
 .pnp
 .pnp.js
 

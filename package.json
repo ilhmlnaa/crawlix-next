@@ -4,8 +4,15 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
+    "dev:api": "pnpm --filter @repo/api start:dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:worker": "pnpm --filter @repo/worker start:dev",
+    "dev:infra": "docker compose up -d rabbitmq redis",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,md,yml,yaml}\"",
     "check-types": "turbo run check-types"
   },
   "devDependencies": {
