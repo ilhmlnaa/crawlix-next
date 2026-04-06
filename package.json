@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=@repo/api --filter=web --filter=@repo/worker",
     "dev:api": "pnpm --filter @repo/api start:dev",
     "dev:web": "pnpm --filter web dev",
     "dev:worker": "pnpm --filter @repo/worker start:dev",
