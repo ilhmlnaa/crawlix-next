@@ -1,5 +1,6 @@
 import {
   Injectable,
+  Logger,
   UnauthorizedException,
   type CanActivate,
 } from '@nestjs/common';
@@ -14,6 +15,8 @@ import { RedisService } from '../infrastructure/redis.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(private readonly redisService: RedisService) {}
 
   private get config() {
@@ -74,19 +77,27 @@ export class AuthService {
     const normalizedEmail = email.trim().toLowerCase();
     const expectedEmail = this.config.auth.adminEmail.trim().toLowerCase();
     const passwordHash = this.hashPassword(password);
-    const expectedPasswordHash = this.hashPassword(this.config.auth.adminPassword);
+    const expectedPasswordHash = this.hashPassword(
+      this.config.auth.adminPassword,
+    );
 
     const emailMatches =
       Buffer.byteLength(normalizedEmail) === Buffer.byteLength(expectedEmail) &&
       timingSafeEqual(Buffer.from(normalizedEmail), Buffer.from(expectedEmail));
     const passwordMatches =
-      Buffer.byteLength(passwordHash) === Buffer.byteLength(expectedPasswordHash) &&
+      Buffer.byteLength(passwordHash) ===
+        Buffer.byteLength(expectedPasswordHash) &&
       timingSafeEqual(
         Buffer.from(passwordHash),
         Buffer.from(expectedPasswordHash),
       );
 
+    this.logger.debug(
+      `login attempt email=${normalizedEmail} emailMatch=${emailMatches} passwordMatch=${passwordMatches}`,
+    );
+
     if (!emailMatches || !passwordMatches) {
+      this.logger.warn(`login rejected email=${normalizedEmail}`);
       throw new UnauthorizedException('Invalid dashboard credentials');
     }
 
@@ -110,6 +121,10 @@ export class AuthService {
       this.config.auth.sessionTtlSeconds,
     );
 
+    this.logger.log(
+      `login success email=${normalizedEmail} sessionId=${sessionId.slice(0, 8)}... expiresAt=${expiresAt}`,
+    );
+
     return {
       session,
       cookieValue: this.encodeCookie(sessionId),
@@ -119,22 +134,31 @@ export class AuthService {
   async logout(rawCookie?: string | null) {
     const sessionId = this.decodeCookie(rawCookie);
     if (!sessionId) {
+      this.logger.debug('logout skipped: invalid or missing session cookie');
       return;
     }
 
     const redis = await this.getRedis();
     await redis.del(this.getSessionKey(sessionId));
+
+    this.logger.log(`logout success sessionId=${sessionId.slice(0, 8)}...`);
   }
 
-  async getAdminFromCookie(rawCookie?: string | null): Promise<AuthenticatedAdmin | null> {
+  async getAdminFromCookie(
+    rawCookie?: string | null,
+  ): Promise<AuthenticatedAdmin | null> {
     const sessionId = this.decodeCookie(rawCookie);
     if (!sessionId) {
+      this.logger.debug('session lookup skipped: invalid cookie');
       return null;
     }
 
     const redis = await this.getRedis();
     const value = await redis.get(this.getSessionKey(sessionId));
     if (!value) {
+      this.logger.debug(
+        `session not found sessionId=${sessionId.slice(0, 8)}...`,
+      );
       return null;
     }
 

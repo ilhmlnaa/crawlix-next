@@ -3,6 +3,11 @@ import { NestFactory } from '@nestjs/core';
 import { getApiRuntimeConfig, validateApiRuntimeConfig } from '@repo/config';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
+import {
+  HttpExceptionFilter,
+  RequestLoggingInterceptor,
+  logBootstrapSummary,
+} from './common/logging';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -16,6 +21,8 @@ async function bootstrap() {
   );
 
   app.enableShutdownHooks();
+  app.useGlobalInterceptors(new RequestLoggingInterceptor());
+  app.useGlobalFilters(new HttpExceptionFilter());
   app.enableCors({
     origin:
       config.corsOrigin === '*'
@@ -38,6 +45,8 @@ async function bootstrap() {
       transform: true,
     }),
   );
+
+  logBootstrapSummary(config);
 
   await app.listen(config.port);
 }

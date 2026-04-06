@@ -10,9 +10,13 @@ import amqp, {
 } from 'amqplib';
 import { getWorkerRuntimeConfig } from '@repo/config';
 import type { ScrapeJobMessage } from '@repo/queue-contracts';
-import { createLogLine } from '@repo/observability';
 import { JobProcessorService } from './job-processor.service';
 import { JobStoreService } from './job-store.service';
+import {
+  logJobFailure,
+  logJobRetry,
+  logQueueConsumerReady,
+} from '../common/logging';
 
 @Injectable()
 export class QueueConsumerService
@@ -28,8 +32,19 @@ export class QueueConsumerService
 
   async onApplicationBootstrap() {
     const config = getWorkerRuntimeConfig();
-    const connection = await amqp.connect(config.queue.url);
-    const channel = await connection.createChannel();
+    let connection: ChannelModel;
+    let channel: Channel;
+
+    try {
+      connection = await amqp.connect(config.queue.url);
+      channel = await connection.createChannel();
+    } catch (error) {
+      const details =
+        error instanceof Error ? error.message : 'Unknown AMQP error';
+      throw new Error(
+        `Unable to connect to RabbitMQ using RABBITMQ_URL=${config.queue.url}. Check the host, credentials, and ensure the port is AMQP (usually 5672, not 15672). Original error: ${details}`,
+      );
+    }
 
     await channel.assertQueue(config.queue.queueName, { durable: true });
     await channel.assertQueue(config.queue.retryQueueName, {
@@ -51,7 +66,7 @@ export class QueueConsumerService
     this.connection = connection;
     this.channel = channel;
 
-    console.log(createLogLine('worker', `consuming ${config.queue.queueName}`));
+    logQueueConsumerReady(config.queue.queueName);
   }
 
   private async handleMessage(message: ConsumeMessage | null) {
@@ -92,11 +107,10 @@ export class QueueConsumerService
           },
         );
         this.channel.ack(message);
-        console.warn(
-          createLogLine(
-            'worker',
-            `job ${payload.jobId} scheduled for retry ${currentAttempt + 1}/${config.queue.maxDeliveryAttempts}`,
-          ),
+        logJobRetry(
+          payload.jobId,
+          currentAttempt + 1,
+          config.queue.maxDeliveryAttempts,
         );
         return;
       }
@@ -131,12 +145,7 @@ export class QueueConsumerService
         },
       );
       this.channel.ack(message);
-      console.error(
-        createLogLine(
-          'worker',
-          `job ${payload.jobId} failed permanently after ${currentAttempt} attempts: ${errorMessage}`,
-        ),
-      );
+      logJobFailure(payload.jobId, currentAttempt, errorMessage);
     }
   }
 
