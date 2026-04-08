@@ -1,13 +1,7 @@
-import {
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { getApiRuntimeConfig } from '@repo/config';
-import type {
-  ApiKeyRecord,
-  CreateApiKeyResponse,
-} from '@repo/queue-contracts';
+import type { ApiKeyRecord, CreateApiKeyResponse } from '@repo/queue-contracts';
 import type { Request } from 'express';
 import { RedisService } from '../infrastructure/redis.service';
 
@@ -51,7 +45,11 @@ export class ApiKeyService {
 
   private parseApiKey(apiKey: string) {
     const [prefix, keyId, ...secretParts] = apiKey.split('_');
-    if (prefix !== this.config.auth.apiKeyPrefix || !keyId || secretParts.length === 0) {
+    if (
+      prefix !== this.config.auth.apiKeyPrefix ||
+      !keyId ||
+      secretParts.length === 0
+    ) {
       return null;
     }
 
@@ -103,7 +101,9 @@ export class ApiKeyService {
     return record;
   }
 
-  private async getStoredById(keyId: string): Promise<StoredApiKeyRecord | null> {
+  private async getStoredById(
+    keyId: string,
+  ): Promise<StoredApiKeyRecord | null> {
     const redis = await this.getRedis();
     const value = await redis.get(this.getRecordKey(keyId));
     return value ? (JSON.parse(value) as StoredApiKeyRecord) : null;
