@@ -31,6 +31,25 @@ curl -X POST http://localhost:3001/api/jobs \
   }'
 ```
 
+### Example Request With Targeted Worker
+
+Use `targetWorkerId` when you want the job to run only on one specific worker instance.
+
+```bash
+curl -X POST http://localhost:3001/api/jobs \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: cx_your_api_key_here" \
+  -d '{
+    "url": "https://example.com/protected",
+    "strategy": "playwright",
+    "targetWorkerId": "worker-host123-4567",
+    "options": {
+      "timeoutMs": 45000,
+      "useCache": false
+    }
+  }'
+```
+
 ### Example Response
 
 ```json
@@ -38,7 +57,8 @@ curl -X POST http://localhost:3001/api/jobs \
   "jobId": "job_01hrx8qj2b1j6m3n9t1",
   "status": "queued",
   "queuedAt": "2026-04-11T07:10:25.000Z",
-  "resultTtlSeconds": 3600
+  "resultTtlSeconds": 3600,
+  "targetWorkerId": "worker-host123-4567"
 }
 ```
 
@@ -64,6 +84,7 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1 \
   "requestedAt": "2026-04-11T07:10:25.000Z",
   "updatedAt": "2026-04-11T07:10:29.000Z",
   "fingerprint": "fp_2d5e2d...",
+  "targetWorkerId": "worker-host123-4567",
   "options": {
     "timeoutMs": 30000,
     "useCache": true
@@ -97,7 +118,8 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
   "method": "GET",
   "responseTimeMs": 842,
   "retries": 0,
-  "cached": false
+  "cached": false,
+  "targetWorkerId": "worker-host123-4567"
 }
 ```
 
@@ -107,6 +129,7 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
 {
   "url": "https://example.com",
   "strategy": "auto",
+  "targetWorkerId": "worker-host123-4567",
   "options": {
     "timeoutMs": 30000,
     "method": "GET",
@@ -134,5 +157,8 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
 
 - `strategy` supports `auto`, `cloudscraper`, and `playwright`.
 - `auto` is the recommended default.
+- `targetWorkerId` is optional. Omit it to let Crawlix Next auto-assign the job through the shared queue.
+- If `targetWorkerId` is provided, the API validates that the worker is still active before accepting the job.
+- Targeted jobs keep their worker affinity during retry and are dispatched to the selected worker queue, not the shared queue.
 - Status polling is the default client pattern in v1.
 - Admin-only endpoints like retry and cancel are intentionally omitted from request examples in this docs section.

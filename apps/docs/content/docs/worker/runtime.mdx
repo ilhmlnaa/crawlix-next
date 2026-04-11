@@ -37,8 +37,8 @@ Example response:
   "queue": {
     "status": "ok",
     "queueName": "crawlix.scrape.jobs",
-    "retryQueueName": "crawlix.scrape.jobs.retry",
-    "deadLetterQueueName": "crawlix.scrape.jobs.dlq",
+    "retryQueueName": "crawlix.scrape.jobs.worker.worker-host123-4567.retry",
+    "deadLetterQueueName": "crawlix.scrape.jobs.worker.worker-host123-4567.dlq",
     "connected": true
   },
   "browser": {
@@ -53,3 +53,6 @@ Example response:
 - The worker keeps browser runtime inside the worker process, not in the API.
 - Playwright browser instances are reused through a lightweight pool.
 - Worker heartbeat is stored in Redis so the dashboard can list active workers.
+- Each worker also exposes a stable `workerId` for the current runtime and consumes a dedicated queue shaped like `crawlix.scrape.jobs.worker.<workerId>`.
+- Jobs created with `targetWorkerId` are published only to that worker-specific queue. They do not fall back to the shared queue automatically.
+- The admin dashboard can list active workers and use their `workerId` for targeted dispatch decisions.
