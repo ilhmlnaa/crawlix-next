@@ -128,6 +128,20 @@ export class ApiKeyService {
     return record;
   }
 
+  async delete(keyId: string): Promise<ApiKeyRecord | null> {
+    const existing = await this.getStoredById(keyId);
+    if (!existing) {
+      return null;
+    }
+
+    const redis = await this.getRedis();
+    await redis.del(this.getRecordKey(keyId));
+    await redis.lrem(this.indexKey, 0, keyId);
+
+    const { keyHash, ...record } = existing;
+    return record;
+  }
+
   async validate(rawApiKey?: string | null): Promise<ApiKeyRecord | null> {
     if (!rawApiKey) {
       return null;

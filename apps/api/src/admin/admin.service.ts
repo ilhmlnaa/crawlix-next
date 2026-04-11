@@ -16,4 +16,8 @@ export class AdminService {
   revokeApiKey(keyId: string) {
     return this.apiKeyService.revoke(keyId);
   }
+
+  deleteApiKey(keyId: string) {
+    return this.apiKeyService.delete(keyId);
+  }
 }

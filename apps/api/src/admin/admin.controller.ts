@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { AdminService } from './admin.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
@@ -21,5 +29,10 @@ export class AdminController {
   @Post(':keyId/revoke')
   revoke(@Param('keyId') keyId: string) {
     return this.adminService.revokeApiKey(keyId);
+  }
+
+  @Delete(':keyId')
+  remove(@Param('keyId') keyId: string) {
+    return this.adminService.deleteApiKey(keyId);
   }
 }

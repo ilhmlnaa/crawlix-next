@@ -57,6 +57,12 @@ import { cn } from "@/lib/utils";
 import { LoginPanel } from "@/app/login-panel";
 import { ApiKeyPanel } from "./api-key-panel";
 
+const NEW_API_KEY_SESSION_STORAGE_KEY = "crawlix:new-api-key";
+type SessionApiKeyReveal = {
+  keyId: string;
+  apiKey: string;
+};
+
 function formatRelativeTime(value?: string): string {
   if (!value) {
     return "-";
@@ -245,8 +251,11 @@ export function DashboardClient({
   const [loadingApiKeys, setLoadingApiKeys] = useState(false);
   const [creatingApiKey, setCreatingApiKey] = useState(false);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
+  const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
   const [newKeyLabel, setNewKeyLabel] = useState("Default scraper client");
+  const [revealableKeyId, setRevealableKeyId] = useState<string | null>(null);
   const [newApiKeyValue, setNewApiKeyValue] = useState<string | null>(null);
+  const [copiedNewApiKey, setCopiedNewApiKey] = useState(false);
   const [creatingJob, setCreatingJob] = useState(false);
   const [createJobError, setCreateJobError] = useState<string | null>(null);
   const [createJobUrl, setCreateJobUrl] = useState("https://example.com");
@@ -303,12 +312,15 @@ export function DashboardClient({
     await fetchJson(`${apiBaseUrl}/auth/logout`, {
       method: "POST",
     });
+    window.sessionStorage.removeItem(NEW_API_KEY_SESSION_STORAGE_KEY);
     setAdmin(null);
     setOverview(null);
     setSelectedJobId(null);
     setSelectedResult(null);
     setApiKeys([]);
+    setRevealableKeyId(null);
     setNewApiKeyValue(null);
+    setCopiedNewApiKey(false);
   };
 
   const handleCreateApiKey = async () => {
@@ -322,7 +334,16 @@ export function DashboardClient({
     );
 
     if (created) {
+      setRevealableKeyId(created.record.keyId);
       setNewApiKeyValue(created.apiKey);
+      setCopiedNewApiKey(false);
+      window.sessionStorage.setItem(
+        NEW_API_KEY_SESSION_STORAGE_KEY,
+        JSON.stringify({
+          keyId: created.record.keyId,
+          apiKey: created.apiKey,
+        } satisfies SessionApiKeyReveal),
+      );
       await loadApiKeys();
     }
 
@@ -339,6 +360,43 @@ export function DashboardClient({
     );
     await loadApiKeys();
     setRevokingKeyId(null);
+  };
+
+  const handleDeleteApiKey = async (keyId: string) => {
+    const confirmed = window.confirm(
+      "Delete this API key permanently? This will remove it from the admin list and cannot be undone.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingKeyId(keyId);
+    await fetchJson<ApiKeyRecord>(`${apiBaseUrl}/admin/api-keys/${keyId}`, {
+      method: "DELETE",
+    });
+    await loadApiKeys();
+    setDeletingKeyId(null);
+  };
+
+  const handleCopyNewApiKey = async () => {
+    if (!newApiKeyValue) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(newApiKeyValue);
+      setCopiedNewApiKey(true);
+    } catch {
+      setCopiedNewApiKey(false);
+    }
+  };
+
+  const handleDismissNewApiKey = () => {
+    window.sessionStorage.removeItem(NEW_API_KEY_SESSION_STORAGE_KEY);
+    setRevealableKeyId(null);
+    setNewApiKeyValue(null);
+    setCopiedNewApiKey(false);
   };
 
   const handleCreateJob = async () => {
@@ -399,6 +457,23 @@ export function DashboardClient({
       cancelled = true;
     };
   }, [apiBaseUrl, loadApiKeys, loadOverview]);
+
+  useEffect(() => {
+    const storedApiKey = window.sessionStorage.getItem(
+      NEW_API_KEY_SESSION_STORAGE_KEY,
+    );
+    if (!storedApiKey) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(storedApiKey) as SessionApiKeyReveal;
+      setRevealableKeyId(parsed.keyId);
+      setNewApiKeyValue(parsed.apiKey);
+    } catch {
+      window.sessionStorage.removeItem(NEW_API_KEY_SESSION_STORAGE_KEY);
+    }
+  }, []);
 
   useEffect(() => {
     if (!admin) {
@@ -1128,11 +1203,17 @@ export function DashboardClient({
               loadingApiKeys={loadingApiKeys}
               creatingApiKey={creatingApiKey}
               revokingKeyId={revokingKeyId}
+              deletingKeyId={deletingKeyId}
               newKeyLabel={newKeyLabel}
               setNewKeyLabel={setNewKeyLabel}
+              revealableKeyId={revealableKeyId}
               newApiKeyValue={newApiKeyValue}
+              copiedNewApiKey={copiedNewApiKey}
               onCreate={handleCreateApiKey}
+              onCopyNewKey={handleCopyNewApiKey}
+              onDismissNewKey={handleDismissNewApiKey}
               onRevoke={handleRevokeApiKey}
+              onDelete={handleDeleteApiKey}
             />
 
             <Card className="border-border/60 bg-card/90">

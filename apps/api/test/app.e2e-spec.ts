@@ -224,6 +224,11 @@ describe('API auth and jobs flow (e2e)', () => {
 
     const apiKey = createKeyResponse.body.apiKey as string;
 
+    const secondaryKeyResponse = await agent
+      .post('/api/admin/api-keys')
+      .send({ label: 'Disposable client' })
+      .expect(201);
+
     const workersResponse = await agent.get('/api/workers').expect(200);
     expect(Array.isArray(workersResponse.body)).toBe(true);
     expect(workersResponse.body[0].workerId).toBe('worker-host123-4567');
@@ -294,6 +299,18 @@ describe('API auth and jobs flow (e2e)', () => {
       .post(`/api/admin/api-keys/${createKeyResponse.body.record.keyId}/revoke`)
       .expect(201);
     expect(revokeResponse.body.status).toBe('revoked');
+
+    await agent
+      .delete(`/api/admin/api-keys/${secondaryKeyResponse.body.record.keyId}`)
+      .expect(200);
+
+    const listKeysResponse = await agent.get('/api/admin/api-keys').expect(200);
+    expect(
+      listKeysResponse.body.some(
+        (record: { keyId: string }) =>
+          record.keyId === secondaryKeyResponse.body.record.keyId,
+      ),
+    ).toBe(false);
 
     await request(app)
       .post('/api/jobs')

@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, LoaderCircle, Trash2 } from "lucide-react";
+import { Copy, EyeOff, KeyRound, LoaderCircle, ShieldBan, Trash2 } from "lucide-react";
 import type { ApiKeyRecord } from "@repo/queue-contracts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,21 +44,33 @@ export function ApiKeyPanel({
   loadingApiKeys,
   creatingApiKey,
   revokingKeyId,
+  deletingKeyId,
   newKeyLabel,
   setNewKeyLabel,
+  revealableKeyId,
   newApiKeyValue,
+  copiedNewApiKey,
   onCreate,
+  onCopyNewKey,
+  onDismissNewKey,
   onRevoke,
+  onDelete,
 }: {
   apiKeys: ApiKeyRecord[];
   loadingApiKeys: boolean;
   creatingApiKey: boolean;
   revokingKeyId: string | null;
+  deletingKeyId: string | null;
   newKeyLabel: string;
   setNewKeyLabel: (value: string) => void;
+  revealableKeyId: string | null;
   newApiKeyValue: string | null;
+  copiedNewApiKey: boolean;
   onCreate: () => void;
+  onCopyNewKey: () => void;
+  onDismissNewKey: () => void;
   onRevoke: (keyId: string) => void;
+  onDelete: (keyId: string) => void;
 }) {
   return (
     <Card className="border-border/60 bg-card/90">
@@ -70,8 +82,8 @@ export function ApiKeyPanel({
           </Badge>
         </div>
         <CardDescription>
-          Create, monitor, and revoke credentials for programmatic scraper
-          clients.
+          Create, monitor, revoke, or permanently delete credentials for
+          programmatic scraper clients.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -98,12 +110,43 @@ export function ApiKeyPanel({
           </div>
           {newApiKeyValue ? (
             <div className="mt-4 rounded-xl border border-border bg-primary/10 px-4 py-4 text-sm">
-              <p className="font-medium text-foreground">New API key</p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="font-medium text-foreground">
+                    New API key ready
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This value is stored temporarily in your current browser
+                    session until you hide it or sign out.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    className="rounded-full"
+                    size="sm"
+                    onClick={onCopyNewKey}
+                  >
+                    <Copy className="mr-2 size-4" />
+                    {copiedNewApiKey ? "Copied" : "Copy key"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="rounded-full"
+                    size="sm"
+                    onClick={onDismissNewKey}
+                  >
+                    <EyeOff className="mr-2 size-4" />
+                    Hide
+                  </Button>
+                </div>
+              </div>
               <p className="mt-2 break-all font-mono text-xs leading-6 text-foreground/90">
                 {newApiKeyValue}
               </p>
               <p className="mt-2 text-xs text-muted-foreground">
-                Save this value now. It is only shown once at creation.
+                Re-opening the page in the same session will keep this reveal,
+                but the raw secret is never returned again by the API.
               </p>
             </div>
           ) : null}
@@ -141,23 +184,51 @@ export function ApiKeyPanel({
                     {formatRelativeTime(apiKey.lastUsedAt)}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="secondary"
-                      className="rounded-full"
-                      size="sm"
-                      disabled={
-                        apiKey.status === "revoked" ||
-                        revokingKeyId === apiKey.keyId
-                      }
-                      onClick={() => onRevoke(apiKey.keyId)}
-                    >
-                      {revokingKeyId === apiKey.keyId ? (
-                        <LoaderCircle className="mr-2 size-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="mr-2 size-4" />
-                      )}
-                      Revoke
-                    </Button>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        className="rounded-full"
+                        size="sm"
+                        disabled={
+                          !newApiKeyValue || revealableKeyId !== apiKey.keyId
+                        }
+                        onClick={onCopyNewKey}
+                      >
+                        <Copy className="mr-2 size-4" />
+                        Copy
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="rounded-full"
+                        size="sm"
+                        disabled={
+                          apiKey.status === "revoked" ||
+                          revokingKeyId === apiKey.keyId
+                        }
+                        onClick={() => onRevoke(apiKey.keyId)}
+                      >
+                        {revokingKeyId === apiKey.keyId ? (
+                          <LoaderCircle className="mr-2 size-4 animate-spin" />
+                        ) : (
+                          <ShieldBan className="mr-2 size-4" />
+                        )}
+                        Revoke
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="rounded-full"
+                        size="sm"
+                        disabled={deletingKeyId === apiKey.keyId}
+                        onClick={() => onDelete(apiKey.keyId)}
+                      >
+                        {deletingKeyId === apiKey.keyId ? (
+                          <LoaderCircle className="mr-2 size-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="mr-2 size-4" />
+                        )}
+                        Delete
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
