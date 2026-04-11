@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ScraperService } from '@repo/scraper';
 import type { ScrapeJobMessage } from '@repo/queue-contracts';
 import { JobStoreService } from './job-store.service';
@@ -6,7 +6,7 @@ import { ScrapeCacheService } from './scrape-cache.service';
 import { WorkerHeartbeatService } from './worker-heartbeat.service';
 
 @Injectable()
-export class JobProcessorService {
+export class JobProcessorService implements OnModuleDestroy {
   private readonly scraper = new ScraperService();
 
   constructor(
@@ -59,5 +59,13 @@ export class JobProcessorService {
       await this.workerHeartbeat.markIdle(false);
       throw error;
     }
+  }
+
+  getRuntimeStats() {
+    return this.scraper.getRuntimeStats();
+  }
+
+  async onModuleDestroy() {
+    await this.scraper.dispose();
   }
 }

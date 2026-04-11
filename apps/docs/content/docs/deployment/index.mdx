@@ -1,0 +1,24 @@
+---
+title: Deployment
+description: Production deployment models for Docker, hybrid worker hosts, and shared infrastructure.
+---
+
+## Deployment Models
+
+<Cards>
+  <Card title="Docker Stack" href="/docs/deployment/docker" />
+  <Card title="Hybrid Worker Hosts" href="/docs/deployment/hybrid-workers" />
+</Cards>
+
+## Shared Dependencies
+
+All deployment models require shared access to:
+
+- RabbitMQ
+- Redis
+- consistent queue configuration
+- consistent result TTL and job prefix configuration
+
+## Operational Recommendation
+
+Use the API readiness endpoint for traffic routing, and use worker readiness for rollout validation and worker fleet health.

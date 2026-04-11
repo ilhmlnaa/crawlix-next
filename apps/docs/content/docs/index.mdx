@@ -1,13 +1,51 @@
 ---
-title: Hello World
-description: Your first document
+title: Crawlix Docs
+description: Technical documentation for the Crawlix Next platform.
 ---
 
-Welcome to the docs! You can start writing documents in `/content/docs`.
+Crawlix Next is a queue-based scraping platform built with:
 
-## What is Next?
+- `Next.js` for the internal dashboard
+- `NestJS` for the API service
+- `NestJS` for the worker service
+- `RabbitMQ` for job queueing, retry, and dead-letter routing
+- `Redis` for cache, job state, result storage, and worker heartbeat
+
+This documentation is authored with Fumadocs using content-driven `.mdx` pages inside `content/docs`.
+
+## What You Will Find Here
 
 <Cards>
-  <Card title="Learn more about Next.js" href="https://nextjs.org/docs" />
-  <Card title="Learn more about Fumadocs" href="https://fumadocs.dev" />
+  <Card title="API" href="/docs/api" />
+  <Card title="Worker" href="/docs/worker" />
+  <Card title="Dashboard" href="/docs/dashboard" />
+  <Card title="Deployment" href="/docs/deployment" />
+</Cards>
+
+## Platform Summary
+
+Crawlix separates request handling from execution:
+
+1. The API receives a request and enqueues a scrape job.
+2. RabbitMQ distributes the job to available workers.
+3. Workers run scraping strategies and write status and result data to Redis.
+4. The dashboard reads system state from the API for operations and monitoring.
+
+## Public vs Admin Surface
+
+The docs intentionally separate public and admin behavior:
+
+- Public/programmatic API endpoints include request examples.
+- Admin-only endpoints such as dashboard login, API key management, retry, and cancel are documented conceptually but do not include request examples here.
+- Dashboard interactions are intended for internal operators using session-based authentication.
+
+## Recommended Reading Order
+
+1. Read the API section if you are integrating programmatically.
+2. Read the Worker section if you are operating or scaling background execution.
+3. Read the Deployment section if you are preparing Docker or hybrid VM rollout.
+
+<Cards>
+  <Card title="Open API docs" href="/docs/api" />
+  <Card title="Open deployment docs" href="/docs/deployment" />
 </Cards>

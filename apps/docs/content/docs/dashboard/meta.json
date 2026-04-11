@@ -1,0 +1,9 @@
+{
+  "title": "Dashboard",
+  "description": "Internal operator control center",
+  "icon": "LayoutDashboard",
+  "root": true,
+  "pages": [
+    "index"
+  ]
+}

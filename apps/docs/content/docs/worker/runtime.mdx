@@ -1,0 +1,55 @@
+---
+title: Runtime & Health
+description: Worker runtime behavior and health endpoints.
+---
+
+## Worker Health Endpoints
+
+### GET /worker/health/live
+
+```bash
+curl http://localhost:3002/worker/health/live
+```
+
+Example response:
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### GET /worker/health/ready
+
+```bash
+curl http://localhost:3002/worker/health/ready
+```
+
+Example response:
+
+```json
+{
+  "status": "ok",
+  "service": "crawlix-worker",
+  "redis": {
+    "status": "ok"
+  },
+  "queue": {
+    "status": "ok",
+    "queueName": "crawlix.scrape.jobs",
+    "retryQueueName": "crawlix.scrape.jobs.retry",
+    "deadLetterQueueName": "crawlix.scrape.jobs.dlq",
+    "connected": true
+  },
+  "browser": {
+    "directBrowserActive": false,
+    "proxyBrowserActive": false
+  }
+}
+```
+
+## Runtime Notes
+
+- The worker keeps browser runtime inside the worker process, not in the API.
+- Playwright browser instances are reused through a lightweight pool.
+- Worker heartbeat is stored in Redis so the dashboard can list active workers.

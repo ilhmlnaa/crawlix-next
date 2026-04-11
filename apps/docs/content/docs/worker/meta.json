@@ -1,0 +1,11 @@
+{
+  "title": "Worker",
+  "description": "Runtime execution, health, and horizontal scaling",
+  "icon": "Bot",
+  "root": true,
+  "pages": [
+    "index",
+    "runtime",
+    "scaling"
+  ]
+}

@@ -1,0 +1,38 @@
+---
+title: Docker Stack
+description: Deploy the full platform using Docker Compose.
+---
+
+## Included Services
+
+- `web`
+- `api`
+- `worker`
+- `rabbitmq`
+- `redis`
+
+## Startup
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+## Important Environment Variables
+
+```bash
+RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+RABBITMQ_QUEUE_NAME=crawlix.scrape.jobs
+RABBITMQ_RETRY_QUEUE_NAME=crawlix.scrape.jobs.retry
+RABBITMQ_DLQ_QUEUE_NAME=crawlix.scrape.jobs.dlq
+REDIS_URL=redis://redis:6379
+SESSION_SECRET=replace-with-strong-session-secret
+DASHBOARD_ADMIN_EMAIL=admin@crawlix.local
+DASHBOARD_ADMIN_PASSWORD=replace-with-strong-admin-password
+```
+
+## Verification
+
+- open the dashboard
+- check `/api/health/ready`
+- check `/worker/health/ready`
+- confirm RabbitMQ management UI shows connected consumers

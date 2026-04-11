@@ -17,6 +17,7 @@ export interface ApiRuntimeConfig {
   serviceName: string;
   port: number;
   corsOrigin: string;
+  publicApiRateLimitPerMinute: number;
   queue: QueueConfig;
   redis: RedisConfig;
   scraper: ScraperRuntimeConfig;
@@ -52,6 +53,10 @@ export interface ScraperRuntimeConfig {
   maxRetries: number;
   retryDelayMs: number;
   userAgent: string;
+  proxyUrl?: string;
+  playwrightHeadless: boolean;
+  playwrightExecutablePath?: string;
+  browserIdleTimeoutMs: number;
 }
 
 function readNumber(value: string | undefined, fallback: number): number {
@@ -160,6 +165,15 @@ function validateScraperConfig(
             throw new Error('SCRAPER_RETRY_DELAY_MS must be 0 or greater');
           })(),
     userAgent: assertNonEmpty(config.userAgent, 'SCRAPER_USER_AGENT'),
+    playwrightHeadless: config.playwrightHeadless,
+    browserIdleTimeoutMs: assertPositiveInteger(
+      config.browserIdleTimeoutMs,
+      'PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS',
+    ),
+    proxyUrl: config.proxyUrl?.trim() ? config.proxyUrl : undefined,
+    playwrightExecutablePath: config.playwrightExecutablePath?.trim()
+      ? config.playwrightExecutablePath
+      : undefined,
   };
 }
 
@@ -195,6 +209,10 @@ export function validateApiRuntimeConfig(
     serviceName: assertNonEmpty(config.serviceName, 'API_SERVICE_NAME'),
     port: assertPositiveInteger(config.port, 'PORT'),
     corsOrigin: assertNonEmpty(config.corsOrigin, 'CORS_ORIGIN'),
+    publicApiRateLimitPerMinute: assertPositiveInteger(
+      config.publicApiRateLimitPerMinute,
+      'PUBLIC_API_RATE_LIMIT_PER_MINUTE',
+    ),
     queue: validateQueueConfig(config.queue),
     redis: validateRedisConfig(config.redis),
     scraper: validateScraperConfig(config.scraper),
@@ -251,6 +269,13 @@ function readScraperConfig(env: NodeJS.ProcessEnv): ScraperRuntimeConfig {
     userAgent:
       env.SCRAPER_USER_AGENT ??
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    proxyUrl: env.SCRAPER_PROXY_URL,
+    playwrightHeadless: env.PLAYWRIGHT_HEADLESS !== 'false',
+    playwrightExecutablePath: env.PLAYWRIGHT_EXECUTABLE_PATH,
+    browserIdleTimeoutMs: readNumber(
+      env.PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS,
+      120000,
+    ),
   };
 }
 
@@ -273,6 +298,10 @@ export function getApiRuntimeConfig(
     serviceName: env.API_SERVICE_NAME ?? 'crawlix-api',
     port: readNumber(env.PORT, 3001),
     corsOrigin: env.CORS_ORIGIN ?? '*',
+    publicApiRateLimitPerMinute: readNumber(
+      env.PUBLIC_API_RATE_LIMIT_PER_MINUTE,
+      60,
+    ),
     queue: readQueueConfig(env),
     redis: readRedisConfig(env),
     scraper: readScraperConfig(env),

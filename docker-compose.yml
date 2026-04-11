@@ -47,6 +47,7 @@ services:
       CORS_ORIGIN: http://localhost:3000
       API_SERVICE_NAME: crawlix-api
       DASHBOARD_ORIGIN: http://localhost:3000
+      PUBLIC_API_RATE_LIMIT_PER_MINUTE: 60
       SESSION_SECRET: replace-with-strong-session-secret
       SESSION_COOKIE_NAME: crawlix_session
       SESSION_TTL_SECONDS: 43200
@@ -67,6 +68,9 @@ services:
       SCRAPER_CACHE_TTL_SECONDS: 900
       SCRAPER_MAX_RETRIES: 2
       SCRAPER_RETRY_DELAY_MS: 1000
+      SCRAPER_PROXY_URL:
+      PLAYWRIGHT_HEADLESS: true
+      PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS: 120000
     ports:
       - '3001:3001'
     healthcheck:
@@ -103,6 +107,14 @@ services:
       SCRAPER_CACHE_TTL_SECONDS: 900
       SCRAPER_MAX_RETRIES: 2
       SCRAPER_RETRY_DELAY_MS: 1000
+      SCRAPER_PROXY_URL:
+      PLAYWRIGHT_HEADLESS: true
+      PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS: 120000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/worker/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
 
   web:
     build:

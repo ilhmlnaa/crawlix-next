@@ -28,6 +28,18 @@ interface ScraperStrategy {
   ): Promise<ScraperStrategyResult>;
 }
 
+export interface BrowserRuntimeStats {
+  available: boolean;
+  direct: {
+    active: boolean;
+    contexts: number;
+  };
+  proxy: {
+    active: boolean;
+    contexts: number;
+  };
+}
+
 const DEFAULT_HEADERS = {
   Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
   'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
@@ -63,6 +75,128 @@ function buildBody(options: ScrapeJobOptions): BodyInit | undefined {
 
 function readTimeout(options: ScrapeJobOptions, config: ScraperRuntimeConfig): number {
   return options.timeoutMs ?? config.defaultTimeoutMs;
+}
+
+class BrowserPoolManager {
+  private static instance: BrowserPoolManager | null = null;
+  private directBrowser: any | null = null;
+  private proxyBrowser: any | null = null;
+  private idleTimers = new Map<'direct' | 'proxy', NodeJS.Timeout>();
+  private playwrightAvailable = true;
+
+  static getInstance() {
+    if (!BrowserPoolManager.instance) {
+      BrowserPoolManager.instance = new BrowserPoolManager();
+    }
+
+    return BrowserPoolManager.instance;
+  }
+
+  async getBrowser(
+    useProxy: boolean,
+    config: ScraperRuntimeConfig,
+  ): Promise<any> {
+    const key: 'direct' | 'proxy' =
+      useProxy && config.proxyUrl ? 'proxy' : 'direct';
+    const existing = key === 'proxy' ? this.proxyBrowser : this.directBrowser;
+
+    if (existing) {
+      this.resetIdleTimer(key, config);
+      return existing;
+    }
+
+    const dynamicImport = new Function(
+      'specifier',
+      'return import(specifier)',
+    ) as (specifier: string) => Promise<any>;
+
+    try {
+      const playwright = await dynamicImport('playwright');
+      const chromium = playwright.chromium;
+      const browser = await chromium.launch({
+        headless: config.playwrightHeadless,
+        executablePath: config.playwrightExecutablePath,
+        proxy:
+          key === 'proxy' && config.proxyUrl
+            ? {
+                server: config.proxyUrl,
+              }
+            : undefined,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+        ],
+      });
+
+      if (key === 'proxy') {
+        this.proxyBrowser = browser;
+      } else {
+        this.directBrowser = browser;
+      }
+      this.playwrightAvailable = true;
+      this.resetIdleTimer(key, config);
+
+      return browser;
+    } catch (error) {
+      this.playwrightAvailable = false;
+      throw error;
+    }
+  }
+
+  private resetIdleTimer(
+    key: 'direct' | 'proxy',
+    config: ScraperRuntimeConfig,
+  ) {
+    const current = this.idleTimers.get(key);
+    if (current) {
+      clearTimeout(current);
+    }
+
+    const timer = setTimeout(() => {
+      void this.closeBrowser(key);
+    }, config.browserIdleTimeoutMs);
+    this.idleTimers.set(key, timer);
+  }
+
+  async closeBrowser(key: 'direct' | 'proxy') {
+    const browser = key === 'proxy' ? this.proxyBrowser : this.directBrowser;
+
+    if (!browser) {
+      return;
+    }
+
+    await browser.close().catch(() => undefined);
+    if (key === 'proxy') {
+      this.proxyBrowser = null;
+    } else {
+      this.directBrowser = null;
+    }
+    const timer = this.idleTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.idleTimers.delete(key);
+    }
+  }
+
+  async destroy() {
+    await Promise.all([this.closeBrowser('direct'), this.closeBrowser('proxy')]);
+  }
+
+  getStats(): BrowserRuntimeStats {
+    return {
+      available: this.playwrightAvailable,
+      direct: {
+        active: Boolean(this.directBrowser),
+        contexts: this.directBrowser?.contexts().length ?? 0,
+      },
+      proxy: {
+        active: Boolean(this.proxyBrowser),
+        contexts: this.proxyBrowser?.contexts().length ?? 0,
+      },
+    };
+  }
 }
 
 async function executeHttpFetch(
@@ -141,6 +275,10 @@ class CloudscraperStrategy implements ScraperStrategy {
         form: job.options.formData,
         headers: buildHeaders(job.options, context.config),
         timeout: readTimeout(job.options, context.config),
+        proxy:
+          job.options.useProxy && context.config.proxyUrl
+            ? context.config.proxyUrl
+            : undefined,
         gzip: true,
         resolveWithFullResponse: true,
       });
@@ -182,6 +320,8 @@ async function maybeWaitAdditionalDelay(page: any, additionalDelayMs?: number) {
 }
 
 class PlaywrightStrategy implements ScraperStrategy {
+  private readonly browserPool = BrowserPoolManager.getInstance();
+
   async execute(
     job: ScrapeJobMessage,
     context: Required<ScrapeExecutionContext>,
@@ -193,10 +333,12 @@ class PlaywrightStrategy implements ScraperStrategy {
 
     try {
       const playwright = await dynamicImport('playwright');
-      const chromium = playwright.chromium;
       const startedAt = Date.now();
       const timeoutMs = readTimeout(job.options, context.config);
-      const browser = await chromium.launch({ headless: true });
+      const browser = await this.browserPool.getBrowser(
+        job.options.useProxy === true,
+        context.config,
+      );
       const page = await browser.newPage({
         userAgent: context.config.userAgent,
       });
@@ -226,7 +368,6 @@ class PlaywrightStrategy implements ScraperStrategy {
         };
       } finally {
         await page.close().catch(() => undefined);
-        await browser.close().catch(() => undefined);
       }
     } catch {
       return executeHttpFetch(job, context, 'playwright-http-fallback');
@@ -283,6 +424,7 @@ function createSuccessResult(
 
 export class ScraperService {
   private readonly strategies = createStrategies();
+  private readonly browserPool = BrowserPoolManager.getInstance();
 
   async execute(
     job: ScrapeJobMessage,
@@ -332,5 +474,13 @@ export class ScraperService {
     }
 
     return createFailureResult(job, 'Max retries exceeded', maxRetries);
+  }
+
+  async dispose(): Promise<void> {
+    await this.browserPool.destroy();
+  }
+
+  getRuntimeStats(): BrowserRuntimeStats {
+    return this.browserPool.getStats();
   }
 }

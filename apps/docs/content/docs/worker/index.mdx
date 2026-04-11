@@ -1,0 +1,20 @@
+---
+title: Worker
+description: Background job execution, health, and scaling model.
+---
+
+Workers are responsible for consuming queue messages and executing scrape jobs.
+
+## Responsibilities
+
+- consume RabbitMQ jobs
+- execute scraping strategies
+- store status and result in Redis
+- publish heartbeat and runtime state for observability
+
+## Main Topics
+
+<Cards>
+  <Card title="Runtime & Health" href="/docs/worker/runtime" />
+  <Card title="Scaling Model" href="/docs/worker/scaling" />
+</Cards>

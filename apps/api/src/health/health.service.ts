@@ -41,6 +41,8 @@ export class HealthService {
           status: 'ok',
           queueName: config.queue.queueName,
           depth: queueStats.messageCount,
+          retryDepth: queueStats.retryMessageCount,
+          deadLetterDepth: queueStats.deadLetterMessageCount,
           consumers: queueStats.consumerCount,
         },
       },

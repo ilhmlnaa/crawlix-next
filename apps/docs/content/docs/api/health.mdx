@@ -1,0 +1,57 @@
+---
+title: Health API
+description: Liveness and readiness endpoints for API service monitoring.
+---
+
+## GET /api/health/live
+
+Simple liveness endpoint for process-level monitoring.
+
+### Example Request
+
+```bash
+curl http://localhost:3001/api/health/live
+```
+
+### Example Response
+
+```json
+{
+  "status": "ok"
+}
+```
+
+## GET /api/health/ready
+
+Readiness endpoint used by load balancers and deployment checks.
+
+### Example Request
+
+```bash
+curl http://localhost:3001/api/health/ready
+```
+
+### Example Response
+
+```json
+{
+  "status": "ok",
+  "service": "crawlix-api",
+  "redis": {
+    "status": "ok"
+  },
+  "queue": {
+    "status": "ok",
+    "queueName": "crawlix.scrape.jobs",
+    "queueDepth": 2,
+    "consumerCount": 3,
+    "retryDepth": 0,
+    "deadLetterDepth": 0
+  }
+}
+```
+
+## Notes
+
+- `live` is best for basic uptime probing.
+- `ready` is better for traffic routing decisions because it checks dependencies.

@@ -1,0 +1,11 @@
+{
+  "title": "Deployment",
+  "description": "Docker and hybrid production rollout",
+  "icon": "Rocket",
+  "root": true,
+  "pages": [
+    "index",
+    "docker",
+    "hybrid-workers"
+  ]
+}

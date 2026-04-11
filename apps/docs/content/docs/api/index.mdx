@@ -1,0 +1,34 @@
+---
+title: API
+description: Public API overview for programmatic job submission and result retrieval.
+---
+
+The public Crawlix API is designed for asynchronous scraping workflows.
+
+## Authentication Model
+
+Programmatic access uses an API key.
+
+- Send the key in `x-api-key`
+- or use `Authorization: Bearer <api-key>`
+
+Admin-only routes exist separately for dashboard operators, but those are intentionally not covered with request examples here.
+
+## Public Endpoints
+
+<Cards>
+  <Card title="Jobs API" href="/docs/api/jobs" />
+  <Card title="Health API" href="/docs/api/health" />
+</Cards>
+
+## Request Flow
+
+1. Create a job with `POST /api/jobs`
+2. Poll status with `GET /api/jobs/:jobId`
+3. Fetch the final payload with `GET /api/jobs/:jobId/result`
+
+## Notes
+
+- Jobs are asynchronous by design.
+- `status` can be `queued`, `processing`, `completed`, `failed`, or `cancelled`.
+- Result retention depends on the configured TTL in Redis.

@@ -24,6 +24,7 @@ export class QueueConsumerService
 {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
+  private consuming = false;
 
   constructor(
     private readonly processor: JobProcessorService,
@@ -65,6 +66,7 @@ export class QueueConsumerService
 
     this.connection = connection;
     this.channel = channel;
+    this.consuming = true;
 
     logQueueConsumerReady(config.queue.queueName);
   }
@@ -154,5 +156,17 @@ export class QueueConsumerService
     await this.connection?.close().catch(() => undefined);
     this.channel = null;
     this.connection = null;
+    this.consuming = false;
+  }
+
+  getStatus() {
+    const config = getWorkerRuntimeConfig();
+
+    return {
+      connected: Boolean(this.connection && this.channel && this.consuming),
+      queueName: config.queue.queueName,
+      retryQueueName: config.queue.retryQueueName,
+      deadLetterQueueName: config.queue.deadLetterQueueName,
+    };
   }
 }

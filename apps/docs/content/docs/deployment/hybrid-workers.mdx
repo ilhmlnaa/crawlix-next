@@ -1,0 +1,21 @@
+---
+title: Hybrid Worker Hosts
+description: Run API and dashboard in Docker while scaling workers on separate VMs.
+---
+
+## Recommended Pattern
+
+- `web` and `api` in Docker
+- one or more workers on EC2 or other VMs
+- shared RabbitMQ and Redis
+
+## EC2 Worker Notes
+
+- install Node.js and `pnpm`
+- use the same release version as API
+- point the worker to the same queue names and Redis prefix
+- use `systemd` for automatic restart
+
+## Why This Works
+
+RabbitMQ distributes messages across all connected consumers, so Docker workers and VM workers can process jobs together as one fleet.

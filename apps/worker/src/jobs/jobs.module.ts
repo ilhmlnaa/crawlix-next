@@ -15,5 +15,6 @@ import { WorkerHeartbeatService } from './worker-heartbeat.service';
     JobProcessorService,
     QueueConsumerService,
   ],
+  exports: [RedisService, JobProcessorService, QueueConsumerService],
 })
 export class JobsModule {}

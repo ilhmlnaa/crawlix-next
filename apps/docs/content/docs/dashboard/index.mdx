@@ -1,0 +1,27 @@
+---
+title: Dashboard
+description: Internal control center for operators and system monitoring.
+---
+
+The dashboard is an internal operator interface built with Next.js.
+
+## What It Shows
+
+- queue depth
+- retry queue depth
+- dead-letter queue depth
+- active worker heartbeat
+- recent jobs
+- API key management
+
+## Authentication
+
+- Dashboard access uses session/cookie authentication.
+- Admin credentials are seeded from environment configuration.
+- Dashboard-only and admin-only routes are intentionally not exposed as public API examples in this docs section.
+
+## Intended Audience
+
+- operators
+- internal developers
+- deployment and support teams

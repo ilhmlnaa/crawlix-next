@@ -12,14 +12,16 @@ const bootstrapLogger = new Logger('WorkerBootstrap');
 
 async function bootstrap() {
   const config = validateWorkerRuntimeConfig(getWorkerRuntimeConfig());
-  const app = await NestFactory.createApplicationContext(AppModule, {
+  const app = await NestFactory.create(AppModule, {
     logger: ['log', 'error', 'warn', 'debug', 'verbose'],
   });
 
+  app.enableShutdownHooks();
   logWorkerBootstrapSummary(config);
   bootstrapLogger.log(
     createWorkerBootstrapMessage(config.serviceName, String(config.port)),
   );
+  await app.listen(config.port);
 
   process.on('SIGTERM', () => {
     void (async () => {

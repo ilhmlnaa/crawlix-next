@@ -107,11 +107,19 @@ Saran rollout:
 
 - API liveness: `GET /api/health/live`
 - API readiness: `GET /api/health/ready`
+- Worker liveness: `GET /worker/health/live`
+- Worker readiness: `GET /worker/health/ready`
 
-Gunakan readiness sebagai target load balancer, karena endpoint ini memeriksa Redis dan RabbitMQ.
+Gunakan readiness sebagai target load balancer atau service monitor, karena endpoint ini memeriksa Redis dan RabbitMQ. Untuk worker, readiness juga mencerminkan status consumer queue dan runtime browser pool.
 
 ## Dashboard security
 
 - Dashboard memakai session cookie admin.
 - Jangan expose dashboard ke internet tanpa reverse proxy, TLS, dan IP allowlist atau VPN.
 - API key dibuat per client dan bisa direvoke dari dashboard.
+
+## Production notes
+
+- `docker/worker.Dockerfile` sudah menyiapkan Chromium runtime untuk strategy Playwright.
+- Untuk host VM non-Docker, pastikan dependency browser setara sudah tersedia bila worker akan menjalankan strategy Playwright.
+- `PUBLIC_API_RATE_LIMIT_PER_MINUTE` sebaiknya tetap diaktifkan walau nanti ada rate limit tambahan di reverse proxy.

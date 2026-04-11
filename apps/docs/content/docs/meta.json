@@ -1,0 +1,10 @@
+{
+  "title": "Crawlix Docs",
+  "pages": [
+    "index",
+    "api",
+    "worker",
+    "dashboard",
+    "deployment"
+  ]
+}

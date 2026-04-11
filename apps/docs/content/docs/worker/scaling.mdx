@@ -1,0 +1,27 @@
+---
+title: Scaling
+description: How to scale workers horizontally across Docker and VM hosts.
+---
+
+## Horizontal Scaling
+
+Workers can be deployed on:
+
+- Docker hosts
+- EC2 virtual machines with `systemd`
+- mixed environments at the same time
+
+As long as all workers point to the same RabbitMQ and Redis infrastructure, they will share the same job stream.
+
+## Recommended Rules
+
+- Keep queue names identical across all workers.
+- Keep Redis key prefix identical across all workers.
+- Roll out new workers before draining old ones when updating runtime behavior.
+- Use readiness checks before putting a new worker in service.
+
+## Typical Split
+
+- lighter workers for HTTP-first scraping
+- fewer, larger workers for Playwright-heavy execution
+- separate hosts if browser workloads become resource heavy

@@ -19,7 +19,9 @@
   "dependencies": {
     "@repo/config": "workspace:*",
     "@repo/queue-contracts": "workspace:*",
-    "@repo/shared": "workspace:*"
+    "@repo/shared": "workspace:*",
+    "cloudscraper": "^4.6.0",
+    "playwright": "^1.59.1"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",

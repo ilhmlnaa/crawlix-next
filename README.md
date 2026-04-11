@@ -62,16 +62,23 @@ Readiness akan memeriksa:
 - queue RabbitMQ
 - queue depth dan consumer count
 
+Worker health endpoints:
+- `GET /worker/health/live`
+- `GET /worker/health/ready`
+
 ## Current Phase
 
 Production foundation yang sudah aktif:
 - enqueue job via API key
 - dashboard admin dengan session/cookie
 - API key management dari dashboard
+- public API rate limiting dasar
 - worker heartbeat aktif di Redis
+- worker health endpoint dan browser runtime stats
 - retry queue dan DLQ di RabbitMQ
 - queue depth utama, retry, dan DLQ di dashboard
 - cancel dan retry action untuk operator
+- browser pool Playwright reusable di worker
 - docker compose lokal dan compose production-oriented
 - integration/e2e test dasar untuk auth, jobs flow, dan retry/DLQ worker
 
@@ -105,21 +112,23 @@ Env queue hardening tambahan:
 Yang sudah ada:
 - validasi config fail-fast saat bootstrap API dan worker
 - API liveness dan readiness endpoint
+- worker liveness dan readiness endpoint
 - heartbeat worker aktif di Redis
 - queue depth main/retry/DLQ dan consumer count dari RabbitMQ
 - retry dan cancel action untuk job queued
 - session auth untuk dashboard internal
 - API key auth untuk client programmatic
 - endpoint admin untuk create/list/revoke API key
+- public API rate limit middleware
+- worker image menyiapkan Chromium runtime untuk Playwright
 - test e2e dasar untuk auth, key flow, enqueue, retry, cancel, dan worker retry/DLQ
 - docker compose healthcheck untuk `rabbitmq`, `redis`, `api`, dan `web`
 - graceful shutdown hook di API dan worker
 
-Yang masih perlu sebelum saya sebut production-ready penuh untuk traffic besar:
-- test integration/e2e yang lebih lengkap dengan Redis/RabbitMQ nyata
-- finalisasi runtime Playwright/cloudscraper production
+Yang masih disarankan untuk traffic sangat besar:
 - observability stack terpisah seperti Prometheus/Grafana/log aggregation
-- deployment manifest final untuk target nyata seperti ECS/Kubernetes
+- secrets manager dan rotasi credential otomatis
+- deployment manifest spesifik target seperti ECS/Kubernetes bila nanti infra mengarah ke sana
 
 ## Deployment guide
 

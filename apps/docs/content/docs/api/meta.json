@@ -1,0 +1,11 @@
+{
+  "title": "API",
+  "description": "Public endpoints and integration examples",
+  "icon": "FileCode",
+  "root": true,
+  "pages": [
+    "index",
+    "jobs",
+    "health"
+  ]
+}

@@ -5,6 +5,8 @@
     "paths": {
       "@/*": ["./*"]
     },
+    "declaration": false,
+    "declarationMap": false,
     "plugins": [
       {
         "name": "next"
