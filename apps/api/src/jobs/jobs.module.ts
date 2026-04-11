@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdminModule } from '../admin/admin.module';
 import { AuthModule } from '../auth/auth.module';
 import { JobsController } from './jobs.controller';
 import { JobsService } from './jobs.service';
@@ -8,7 +9,7 @@ import { RedisService } from '../infrastructure/redis.service';
 import { WorkerRegistryService } from './worker-registry.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AdminModule],
   controllers: [JobsController],
   providers: [
     JobsService,

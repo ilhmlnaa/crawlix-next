@@ -85,11 +85,13 @@ Production foundation yang sudah aktif:
 ## Env strategy
 
 - Untuk workflow lokal normal dari root monorepo, cukup pakai root [`.env.example`](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\.env.example) menjadi `.env`.
+- Root `.env.example` sekarang sudah dibagi dengan divider per area seperti `SHARED INFRASTRUCTURE`, `API SERVICE`, `DASHBOARD AUTH`, `WORKER SERVICE`, `SCRAPER RUNTIME`, dan `WEB APP` supaya lebih mudah dibaca.
 - Saya juga tambahkan contoh per app:
   - [apps/api/.env.example](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\api\.env.example)
   - [apps/worker/.env.example](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\worker\.env.example)
   - [apps/web/.env.example](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\web\.env.example)
 - File per app ini berguna kalau nanti API, worker, dan web dijalankan atau dideploy terpisah.
+- `apps/docs` saat ini belum membutuhkan file env sendiri karena belum ada runtime env khusus yang wajib untuk Fumadocs di project ini.
 - Jadi jawabannya: tidak wajib membuat `.env` di setiap folder `apps`, tapi itu berguna untuk deployment terpisah atau local run per service.
 
 Env auth tambahan yang sekarang wajib untuk API production:

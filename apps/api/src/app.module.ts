@@ -4,6 +4,7 @@ import {
   type NestModule,
   RequestMethod,
 } from '@nestjs/common';
+import { AdminModule } from './admin/admin.module';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -16,6 +17,7 @@ import { JobsModule } from './jobs/jobs.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     AuthModule,
+    AdminModule,
     JobsModule,
     HealthModule,
   ],

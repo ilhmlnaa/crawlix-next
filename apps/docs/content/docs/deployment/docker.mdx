@@ -30,6 +30,16 @@ DASHBOARD_ADMIN_EMAIL=admin@crawlix.local
 DASHBOARD_ADMIN_PASSWORD=replace-with-strong-admin-password
 ```
 
+## Env File Strategy
+
+- For local monorepo development, use the root `.env.example` as the main template.
+- The root example is grouped with clear dividers for shared infrastructure, API, auth, worker, scraper runtime, and web.
+- If you deploy services separately, use the app-level templates:
+  - `apps/api/.env.example`
+  - `apps/worker/.env.example`
+  - `apps/web/.env.example`
+- The docs app currently does not require its own dedicated `.env.example`.
+
 ## Verification
 
 - open the dashboard

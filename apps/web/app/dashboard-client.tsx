@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
-  KeyRound,
   LoaderCircle,
   LogOut,
   Rabbit,
@@ -129,7 +128,12 @@ function WorkerCard({ worker }: { worker: WorkerHeartbeat }) {
             <CardTitle className="text-base">{worker.serviceName}</CardTitle>
             <CardDescription>{worker.workerId}</CardDescription>
           </div>
-          <Badge className={cn("rounded-full border px-3 py-1", workerBadgeClass(worker.status))}>
+          <Badge
+            className={cn(
+              "rounded-full border px-3 py-1",
+              workerBadgeClass(worker.status),
+            )}
+          >
             {worker.status}
           </Badge>
         </div>
@@ -142,7 +146,8 @@ function WorkerCard({ worker }: { worker: WorkerHeartbeat }) {
       </CardHeader>
       <CardContent className="space-y-3 text-sm text-muted-foreground">
         <div className="rounded-2xl bg-secondary/70 px-4 py-3">
-          Current job: {worker.currentJobId ? worker.currentJobId.slice(0, 12) : "idle"}
+          Current job:{" "}
+          {worker.currentJobId ? worker.currentJobId.slice(0, 12) : "idle"}
         </div>
         <div>Last heartbeat: {formatRelativeTime(worker.lastSeenAt)}</div>
       </CardContent>
@@ -174,7 +179,10 @@ function QueueProgress({
   );
 }
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+async function fetchJson<T>(
+  url: string,
+  init?: RequestInit,
+): Promise<T | null> {
   try {
     const response = await fetch(url, {
       credentials: "include",
@@ -208,11 +216,15 @@ export function DashboardClient({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [overview, setOverview] = useState<JobsOverviewSnapshot | null>(initialOverview);
+  const [overview, setOverview] = useState<JobsOverviewSnapshot | null>(
+    initialOverview,
+  );
   const [selectedJobId, setSelectedJobId] = useState<string | null>(
     initialOverview?.recentJobs[0]?.jobId ?? null,
   );
-  const [selectedResult, setSelectedResult] = useState<ScrapeJobResult | null>(null);
+  const [selectedResult, setSelectedResult] = useState<ScrapeJobResult | null>(
+    null,
+  );
   const [loadingResult, setLoadingResult] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
@@ -225,18 +237,24 @@ export function DashboardClient({
   const [newApiKeyValue, setNewApiKeyValue] = useState<string | null>(null);
 
   const loadOverview = async () => {
-    const snapshot = await fetchJson<JobsOverviewSnapshot>(`${apiBaseUrl}/jobs/overview`);
+    const snapshot = await fetchJson<JobsOverviewSnapshot>(
+      `${apiBaseUrl}/jobs/overview`,
+    );
     if (snapshot) {
       startTransition(() => {
         setOverview(snapshot);
-        setSelectedJobId((current) => current ?? snapshot.recentJobs[0]?.jobId ?? null);
+        setSelectedJobId(
+          (current) => current ?? snapshot.recentJobs[0]?.jobId ?? null,
+        );
       });
     }
   };
 
   const loadApiKeys = async () => {
     setLoadingApiKeys(true);
-    const keys = await fetchJson<ApiKeyRecord[]>(`${apiBaseUrl}/admin/api-keys`);
+    const keys = await fetchJson<ApiKeyRecord[]>(
+      `${apiBaseUrl}/admin/api-keys`,
+    );
     setApiKeys(keys ?? []);
     setLoadingApiKeys(false);
   };
@@ -278,10 +296,13 @@ export function DashboardClient({
 
   const handleCreateApiKey = async () => {
     setCreatingApiKey(true);
-    const created = await fetchJson<CreateApiKeyResponse>(`${apiBaseUrl}/admin/api-keys`, {
-      method: "POST",
-      body: JSON.stringify({ label: newKeyLabel }),
-    });
+    const created = await fetchJson<CreateApiKeyResponse>(
+      `${apiBaseUrl}/admin/api-keys`,
+      {
+        method: "POST",
+        body: JSON.stringify({ label: newKeyLabel }),
+      },
+    );
 
     if (created) {
       setNewApiKeyValue(created.apiKey);
@@ -293,9 +314,12 @@ export function DashboardClient({
 
   const handleRevokeApiKey = async (keyId: string) => {
     setRevokingKeyId(keyId);
-    await fetchJson<ApiKeyRecord>(`${apiBaseUrl}/admin/api-keys/${keyId}/revoke`, {
-      method: "POST",
-    });
+    await fetchJson<ApiKeyRecord>(
+      `${apiBaseUrl}/admin/api-keys/${keyId}/revoke`,
+      {
+        method: "POST",
+      },
+    );
     await loadApiKeys();
     setRevokingKeyId(null);
   };
@@ -305,7 +329,9 @@ export function DashboardClient({
 
     const bootstrap = async () => {
       setAuthLoading(true);
-      const me = await fetchJson<{ admin: AuthenticatedAdmin }>(`${apiBaseUrl}/auth/me`);
+      const me = await fetchJson<{ admin: AuthenticatedAdmin }>(
+        `${apiBaseUrl}/auth/me`,
+      );
       if (cancelled) {
         return;
       }
@@ -381,9 +407,11 @@ export function DashboardClient({
   const retryQueueDepth = overview?.retryQueueDepth ?? 0;
   const deadLetterQueueDepth = overview?.deadLetterQueueDepth ?? 0;
   const activeWorkers =
-    overview?.workers.filter((worker) => worker.status === "processing").length ?? 0;
+    overview?.workers.filter((worker) => worker.status === "processing")
+      .length ?? 0;
   const selectedJob = useMemo(
-    () => overview?.recentJobs.find((job) => job.jobId === selectedJobId) ?? null,
+    () =>
+      overview?.recentJobs.find((job) => job.jobId === selectedJobId) ?? null,
     [overview, selectedJobId],
   );
 
@@ -395,9 +423,12 @@ export function DashboardClient({
 
   const handleRetry = async (jobId: string) => {
     setRetryingJobId(jobId);
-    const retried = await fetchJson<EnqueueJobResponse>(`${apiBaseUrl}/jobs/${jobId}/retry`, {
-      method: "POST",
-    });
+    const retried = await fetchJson<EnqueueJobResponse>(
+      `${apiBaseUrl}/jobs/${jobId}/retry`,
+      {
+        method: "POST",
+      },
+    );
 
     if (retried) {
       await handleRefresh();
@@ -418,7 +449,7 @@ export function DashboardClient({
 
   if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,_#fcfbf7_0%,_#f5f2ea_45%,_#f7f5ef_100%)]">
+      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#fcfbf7_0%,#f5f2ea_45%,#f7f5ef_100%)]">
         <div className="flex items-center gap-3 rounded-full border border-white/70 bg-white/85 px-5 py-3 text-sm text-muted-foreground shadow-sm">
           <LoaderCircle className="size-4 animate-spin" />
           Memeriksa session dashboard...
@@ -442,7 +473,7 @@ export function DashboardClient({
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.18),_transparent_28%),radial-gradient(circle_at_top_right,_rgba(45,212,191,0.14),_transparent_24%),linear-gradient(180deg,_#fcfbf7_0%,_#f5f2ea_45%,_#f7f5ef_100%)] px-4 py-6 md:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(45,212,191,0.14),transparent_24%),linear-gradient(180deg,#fcfbf7_0%,#f5f2ea_45%,#f7f5ef_100%)] px-4 py-6 md:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(244,247,250,0.76))] p-6 shadow-[0_32px_120px_-50px_rgba(15,23,42,0.55)] backdrop-blur md:p-8">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
@@ -452,11 +483,13 @@ export function DashboardClient({
               </Badge>
               <div className="space-y-3">
                 <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-balance text-foreground md:text-5xl">
-                  Pantau queue, worker aktif, dan hasil scraping dari satu dashboard operasional.
+                  Pantau queue, worker aktif, dan hasil scraping dari satu
+                  dashboard operasional.
                 </h1>
                 <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-                  Dashboard ini melakukan refresh otomatis, menampilkan heartbeat worker aktif,
-                  dan memberi aksi retry langsung dari panel detail job.
+                  Dashboard ini melakukan refresh otomatis, menampilkan
+                  heartbeat worker aktif, dan memberi aksi retry langsung dari
+                  panel detail job.
                 </p>
               </div>
             </div>
@@ -464,7 +497,9 @@ export function DashboardClient({
             <div className="grid gap-3 rounded-[1.75rem] border border-white/70 bg-white/75 p-4 text-sm text-muted-foreground shadow-sm sm:grid-cols-2">
               <div>
                 <p className="uppercase tracking-[0.24em]">Admin</p>
-                <p className="mt-2 font-medium text-foreground">{admin.email}</p>
+                <p className="mt-2 font-medium text-foreground">
+                  {admin.email}
+                </p>
               </div>
               <div>
                 <p className="uppercase tracking-[0.24em]">Queue</p>
@@ -473,7 +508,11 @@ export function DashboardClient({
                 </p>
               </div>
               <div className="sm:col-span-2">
-                <Button variant="secondary" className="rounded-full" onClick={handleLogout}>
+                <Button
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 size-4" />
                   Logout
                 </Button>
@@ -492,7 +531,9 @@ export function DashboardClient({
             onClick={handleRefresh}
             disabled={refreshing}
           >
-            <RefreshCw className={cn("mr-2 size-4", refreshing && "animate-spin")} />
+            <RefreshCw
+              className={cn("mr-2 size-4", refreshing && "animate-spin")}
+            />
             Refresh sekarang
           </Button>
         </section>
@@ -549,7 +590,8 @@ export function DashboardClient({
                 <div>
                   <CardTitle className="text-2xl">Queue health</CardTitle>
                   <CardDescription>
-                    Distribusi status job terbaru untuk membaca aliran queue dengan cepat.
+                    Distribusi status job terbaru untuk membaca aliran queue
+                    dengan cepat.
                   </CardDescription>
                 </div>
                 <div className="rounded-2xl bg-primary/10 p-3 text-primary">
@@ -560,10 +602,22 @@ export function DashboardClient({
             </CardHeader>
             <CardContent className="space-y-6">
               <QueueProgress label="Queued" value={queued} total={totalJobs} />
-              <QueueProgress label="Processing" value={processing} total={totalJobs} />
-              <QueueProgress label="Completed" value={completed} total={totalJobs} />
+              <QueueProgress
+                label="Processing"
+                value={processing}
+                total={totalJobs}
+              />
+              <QueueProgress
+                label="Completed"
+                value={completed}
+                total={totalJobs}
+              />
               <QueueProgress label="Failed" value={failed} total={totalJobs} />
-              <QueueProgress label="Cancelled" value={cancelled} total={totalJobs} />
+              <QueueProgress
+                label="Cancelled"
+                value={cancelled}
+                total={totalJobs}
+              />
               <div className="grid gap-3 rounded-[1.5rem] bg-secondary/60 p-4 md:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Idle workers</p>
@@ -572,19 +626,25 @@ export function DashboardClient({
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Consumers on broker</p>
+                  <p className="text-sm text-muted-foreground">
+                    Consumers on broker
+                  </p>
                   <p className="mt-2 text-2xl font-semibold text-foreground">
                     {overview?.consumerCount ?? 0}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Retry queue depth</p>
+                  <p className="text-sm text-muted-foreground">
+                    Retry queue depth
+                  </p>
                   <p className="mt-2 text-2xl font-semibold text-foreground">
                     {retryQueueDepth}
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Dead-letter depth</p>
+                  <p className="text-sm text-muted-foreground">
+                    Dead-letter depth
+                  </p>
                   <p className="mt-2 text-2xl font-semibold text-foreground">
                     {deadLetterQueueDepth}
                   </p>
@@ -599,7 +659,8 @@ export function DashboardClient({
                 <div>
                   <CardTitle className="text-2xl">Worker fleet</CardTitle>
                   <CardDescription>
-                    Heartbeat aktif, job yang sedang dikerjakan, dan beban tiap worker.
+                    Heartbeat aktif, job yang sedang dikerjakan, dan beban tiap
+                    worker.
                   </CardDescription>
                 </div>
                 <div className="rounded-2xl bg-accent/20 p-3 text-accent-foreground">
@@ -617,8 +678,9 @@ export function DashboardClient({
                 </div>
               ) : (
                 <div className="rounded-[1.5rem] border border-dashed border-border bg-secondary/40 px-6 py-8 text-center text-sm text-muted-foreground">
-                  Belum ada heartbeat worker. Jalankan `pnpm dev:worker` atau container worker
-                  agar dashboard bisa mendeteksi instance aktif.
+                  Belum ada heartbeat worker. Jalankan `pnpm dev:worker` atau
+                  container worker agar dashboard bisa mendeteksi instance
+                  aktif.
                 </div>
               )}
             </CardContent>
@@ -634,7 +696,7 @@ export function DashboardClient({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ScrollArea className="h-[520px] rounded-3xl border border-border/60 bg-white/85">
+              <ScrollArea className="h-130 rounded-3xl border border-border/60 bg-white/85">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -655,16 +717,23 @@ export function DashboardClient({
                         )}
                         onClick={() => setSelectedJobId(job.jobId)}
                       >
-                        <TableCell className="font-medium">{job.jobId.slice(0, 8)}</TableCell>
+                        <TableCell className="font-medium">
+                          {job.jobId.slice(0, 8)}
+                        </TableCell>
                         <TableCell>
-                          <Badge className={cn("rounded-full border px-3 py-1", statusBadgeClass(job.status))}>
+                          <Badge
+                            className={cn(
+                              "rounded-full border px-3 py-1",
+                              statusBadgeClass(job.status),
+                            )}
+                          >
                             {job.status}
                           </Badge>
                         </TableCell>
                         <TableCell className="uppercase tracking-wide text-muted-foreground">
                           {job.strategy}
                         </TableCell>
-                        <TableCell className="max-w-[360px] truncate text-foreground/85">
+                        <TableCell className="max-w-90 truncate text-foreground/85">
                           {job.url}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
@@ -684,7 +753,8 @@ export function DashboardClient({
                 <div>
                   <CardTitle className="text-2xl">Job details</CardTitle>
                   <CardDescription>
-                    Result content, metadata, serta retry dan cancel action untuk job terpilih.
+                    Result content, metadata, serta retry dan cancel action
+                    untuk job terpilih.
                   </CardDescription>
                 </div>
                 {selectedJob ? (
@@ -727,17 +797,26 @@ export function DashboardClient({
                   <div className="grid gap-3 rounded-[1.5rem] bg-secondary/55 p-4 text-sm md:grid-cols-2">
                     <div>
                       <p className="text-muted-foreground">Job ID</p>
-                      <p className="mt-1 font-medium text-foreground">{selectedJob.jobId}</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {selectedJob.jobId}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Status</p>
-                      <Badge className={cn("mt-2 rounded-full border px-3 py-1", statusBadgeClass(selectedJob.status))}>
+                      <Badge
+                        className={cn(
+                          "mt-2 rounded-full border px-3 py-1",
+                          statusBadgeClass(selectedJob.status),
+                        )}
+                      >
                         {selectedJob.status}
                       </Badge>
                     </div>
                     <div>
                       <p className="text-muted-foreground">URL</p>
-                      <p className="mt-1 break-all font-medium text-foreground">{selectedJob.url}</p>
+                      <p className="mt-1 break-all font-medium text-foreground">
+                        {selectedJob.url}
+                      </p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Updated</p>
@@ -748,7 +827,9 @@ export function DashboardClient({
                     {selectedJob.retriedFromJobId ? (
                       <div className="md:col-span-2">
                         <p className="text-muted-foreground">Retried from</p>
-                        <p className="mt-1 font-medium text-foreground">{selectedJob.retriedFromJobId}</p>
+                        <p className="mt-1 font-medium text-foreground">
+                          {selectedJob.retriedFromJobId}
+                        </p>
                       </div>
                     ) : null}
                     {selectedJob.options.timeoutMs ? (
@@ -816,25 +897,32 @@ export function DashboardClient({
                       ) : null}
 
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-foreground">Preview</p>
+                        <p className="text-sm font-medium text-foreground">
+                          Preview
+                        </p>
                         <div className="rounded-[1.5rem] border border-border/70 bg-white/80 px-4 py-4 text-sm leading-7 text-muted-foreground">
-                          {selectedResult.preview ?? selectedResult.content?.slice(0, 500) ?? "No preview"}
+                          {selectedResult.preview ??
+                            selectedResult.content?.slice(0, 500) ??
+                            "No preview"}
                         </div>
                       </div>
 
                       <div className="space-y-2">
-                        <p className="text-sm font-medium text-foreground">Raw content snippet</p>
-                        <ScrollArea className="h-[220px] rounded-[1.5rem] border border-border/70 bg-zinc-950 px-4 py-4">
-                          <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-6 text-zinc-200">
-                            {selectedResult.content?.slice(0, 4000) ?? "No content stored"}
+                        <p className="text-sm font-medium text-foreground">
+                          Raw content snippet
+                        </p>
+                        <ScrollArea className="h-55 rounded-[1.5rem] border border-border/70 bg-zinc-950 px-4 py-4">
+                          <pre className="whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6 text-zinc-200">
+                            {selectedResult.content?.slice(0, 4000) ??
+                              "No content stored"}
                           </pre>
                         </ScrollArea>
                       </div>
                     </div>
                   ) : (
                     <div className="rounded-[1.5rem] border border-dashed border-border bg-secondary/40 px-6 py-8 text-center text-sm text-muted-foreground">
-                      Result untuk job ini belum tersedia. Jika status masih `queued` atau
-                      `processing`, tunggu refresh berikutnya.
+                      Result untuk job ini belum tersedia. Jika status masih
+                      `queued` atau `processing`, tunggu refresh berikutnya.
                     </div>
                   )}
                 </>
@@ -869,16 +957,18 @@ export function DashboardClient({
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-muted-foreground">
               <div className="rounded-[1.5rem] border border-border/70 bg-secondary/35 p-4">
-                Main queue menangani job baru. Retry queue menahan job recoverable sebelum dikirim
-                ulang ke worker. DLQ menampung job yang sudah melebihi batas percobaan.
+                Main queue menangani job baru. Retry queue menahan job
+                recoverable sebelum dikirim ulang ke worker. DLQ menampung job
+                yang sudah melebihi batas percobaan.
               </div>
               <div className="rounded-[1.5rem] border border-border/70 bg-secondary/35 p-4">
-                Worker dari Docker dan VM bisa muncul bersamaan selama semuanya terhubung ke
-                RabbitMQ dan Redis yang sama.
+                Worker dari Docker dan VM bisa muncul bersamaan selama semuanya
+                terhubung ke RabbitMQ dan Redis yang sama.
               </div>
               <div className="rounded-[1.5rem] border border-border/70 bg-secondary/35 p-4">
-                Session dashboard hanya untuk admin manusia. API key sebaiknya dibuat per client
-                agar revoke tidak memutus semua integrasi sekaligus.
+                Session dashboard hanya untuk admin manusia. API key sebaiknya
+                dibuat per client agar revoke tidak memutus semua integrasi
+                sekaligus.
               </div>
             </CardContent>
           </Card>
