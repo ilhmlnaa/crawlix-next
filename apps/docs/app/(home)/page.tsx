@@ -57,7 +57,7 @@ const flow = [
 export default function HomePage() {
   return (
     <main className="relative overflow-hidden">
-      <div className="absolute inset-x-0 top-0 -z-10 h-[32rem] bg-[radial-gradient(circle_at_top_left,rgba(120,170,255,0.18),transparent_34%),radial-gradient(circle_at_top_right,rgba(80,220,170,0.14),transparent_28%),linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent)]" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-128 bg-[radial-gradient(circle_at_top_left,rgba(120,170,255,0.18),transparent_34%),radial-gradient(circle_at_top_right,rgba(80,220,170,0.14),transparent_28%),linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent)]" />
 
       <section className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl flex-col px-6 pb-20 pt-16 md:px-10 lg:pt-20">
         <div className="grid gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
@@ -179,7 +179,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        <section className="mt-14 rounded-[2rem] border border-fd-border bg-fd-card/60 p-6 shadow-sm backdrop-blur md:p-8">
+        <section className="mt-14 rounded-4xl border border-fd-border bg-fd-card/60 p-6 shadow-sm backdrop-blur md:p-8">
           <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-fd-primary/80">
@@ -198,7 +198,9 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="rounded-2xl border border-fd-border bg-fd-background/70 p-5">
-                <p className="font-medium text-fd-foreground">Platform Engineers</p>
+                <p className="font-medium text-fd-foreground">
+                  Platform Engineers
+                </p>
                 <p className="mt-2 text-sm leading-6 text-fd-muted-foreground">
                   Understand queue topology, worker runtime behavior, and
                   service boundaries inside the monorepo.

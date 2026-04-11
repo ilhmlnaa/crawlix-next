@@ -1,6 +1,8 @@
 <div align="center">
 
-<img src="https://media1.tenor.com/m/gWFk3_M14rkAAAAd/craft-anime.gif" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
+<img src="https://storage.hamdiv.me/project/crawlix/crawlix.png" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
+
+<!-- https://media1.tenor.com/m/gWFk3_M14rkAAAAd/craft-anime.gif -->
 
 <p>
   <img src="https://img.shields.io/badge/Next.js-16+-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js">
@@ -155,17 +157,17 @@ crawlix-next/
 
 ## Technology Stack
 
-| Area | Technology |
-| --- | --- |
-| Frontend dashboard | Next.js App Router, Tailwind CSS, shadcn/ui |
-| API | NestJS |
-| Worker runtime | NestJS |
-| Queue broker | RabbitMQ |
-| State and cache | Redis |
-| Monorepo tooling | pnpm, Turborepo |
+| Area               | Technology                                                                      |
+| ------------------ | ------------------------------------------------------------------------------- |
+| Frontend dashboard | Next.js App Router, Tailwind CSS, shadcn/ui                                     |
+| API                | NestJS                                                                          |
+| Worker runtime     | NestJS                                                                          |
+| Queue broker       | RabbitMQ                                                                        |
+| State and cache    | Redis                                                                           |
+| Monorepo tooling   | pnpm, Turborepo                                                                 |
 | Scraping execution | Shared scraper package with `auto`, `cloudscraper`, and `playwright` strategies |
-| Documentation | Fumadocs |
-| Containerization | Docker, Docker Compose |
+| Documentation      | Fumadocs                                                                        |
+| Containerization   | Docker, Docker Compose                                                          |
 
 ---
 
@@ -173,12 +175,12 @@ crawlix-next/
 
 Before running the project, ensure these tools are available:
 
-| Tool | Minimum Version | Notes |
-| --- | --- | --- |
-| Node.js | `>= 18` | Required for the monorepo |
-| pnpm | `>= 9` | Official package manager used by this repository |
-| Docker | Recent stable version | Needed for local RabbitMQ, Redis, and containerized runtime |
-| Git | Recent stable version | Recommended for branch and release workflow |
+| Tool    | Minimum Version       | Notes                                                       |
+| ------- | --------------------- | ----------------------------------------------------------- |
+| Node.js | `>= 18`               | Required for the monorepo                                   |
+| pnpm    | `>= 9`                | Official package manager used by this repository            |
+| Docker  | Recent stable version | Needed for local RabbitMQ, Redis, and containerized runtime |
+| Git     | Recent stable version | Recommended for branch and release workflow                 |
 
 ---
 
@@ -233,13 +235,13 @@ pnpm dev:docs
 
 ### 6. Open the platform
 
-| Service | URL |
-| --- | --- |
-| Dashboard | [http://localhost:3000](http://localhost:3000) |
-| API base | [http://localhost:3001/api](http://localhost:3001/api) |
-| Worker health | [http://localhost:3002/worker/health/live](http://localhost:3002/worker/health/live) |
-| RabbitMQ management | [http://localhost:15672](http://localhost:15672) |
-| Docs | [http://localhost:3005](http://localhost:3005) |
+| Service             | URL                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------ |
+| Dashboard           | [http://localhost:3000](http://localhost:3000)                                       |
+| API base            | [http://localhost:3001/api](http://localhost:3001/api)                               |
+| Worker health       | [http://localhost:3002/worker/health/live](http://localhost:3002/worker/health/live) |
+| RabbitMQ management | [http://localhost:15672](http://localhost:15672)                                     |
+| Docs                | [http://localhost:3005](http://localhost:3005)                                       |
 
 ---
 
@@ -256,19 +258,19 @@ For standard local development, use the root `.env` file. The repository already
 
 ### Important environment variables
 
-| Variable | Purpose |
-| --- | --- |
-| `RABBITMQ_URL` | RabbitMQ connection string |
-| `REDIS_URL` | Redis connection string |
-| `RABBITMQ_QUEUE_NAME` | Shared main queue name |
-| `RABBITMQ_RETRY_QUEUE_NAME` | Shared retry queue |
-| `RABBITMQ_DLQ_QUEUE_NAME` | Shared dead-letter queue |
-| `SESSION_SECRET` | Cookie session signing secret |
-| `DASHBOARD_ADMIN_EMAIL` | Seeded admin email |
-| `DASHBOARD_ADMIN_PASSWORD` | Seeded admin password |
-| `NEXT_PUBLIC_API_BASE_URL` | Public API URL used by the dashboard at build time |
-| `SCRAPER_DEFAULT_STRATEGY` | Default strategy for job creation |
-| `PUBLIC_API_RATE_LIMIT_PER_MINUTE` | Public API throttling threshold |
+| Variable                           | Purpose                                            |
+| ---------------------------------- | -------------------------------------------------- |
+| `RABBITMQ_URL`                     | RabbitMQ connection string                         |
+| `REDIS_URL`                        | Redis connection string                            |
+| `RABBITMQ_QUEUE_NAME`              | Shared main queue name                             |
+| `RABBITMQ_RETRY_QUEUE_NAME`        | Shared retry queue                                 |
+| `RABBITMQ_DLQ_QUEUE_NAME`          | Shared dead-letter queue                           |
+| `SESSION_SECRET`                   | Cookie session signing secret                      |
+| `DASHBOARD_ADMIN_EMAIL`            | Seeded admin email                                 |
+| `DASHBOARD_ADMIN_PASSWORD`         | Seeded admin password                              |
+| `NEXT_PUBLIC_API_BASE_URL`         | Public API URL used by the dashboard at build time |
+| `SCRAPER_DEFAULT_STRATEGY`         | Default strategy for job creation                  |
+| `PUBLIC_API_RATE_LIMIT_PER_MINUTE` | Public API throttling threshold                    |
 
 ### Per-app environment examples
 
@@ -302,21 +304,21 @@ This matters especially for Docker deployment:
 
 Run all commands from the repository root:
 
-| Command | Purpose |
-| --- | --- |
-| `pnpm install` | Install workspace dependencies |
-| `pnpm dev` | Start main app development pipeline |
-| `pnpm dev:api` | Start NestJS API in watch mode |
-| `pnpm dev:worker` | Start NestJS worker in watch mode |
-| `pnpm dev:web` | Start Next.js dashboard |
-| `pnpm dev:docs` | Start Fumadocs site |
-| `pnpm dev:infra` | Start RabbitMQ and Redis through Docker Compose |
-| `pnpm build` | Build all packages and applications |
-| `pnpm check-types` | Run TypeScript checks across the workspace |
-| `pnpm lint` | Run linting tasks |
-| `pnpm docker:up` | Start the full local Docker stack |
-| `pnpm docker:down` | Stop the local Docker stack |
-| `pnpm docker:logs` | Stream container logs |
+| Command            | Purpose                                         |
+| ------------------ | ----------------------------------------------- |
+| `pnpm install`     | Install workspace dependencies                  |
+| `pnpm dev`         | Start main app development pipeline             |
+| `pnpm dev:api`     | Start NestJS API in watch mode                  |
+| `pnpm dev:worker`  | Start NestJS worker in watch mode               |
+| `pnpm dev:web`     | Start Next.js dashboard                         |
+| `pnpm dev:docs`    | Start Fumadocs site                             |
+| `pnpm dev:infra`   | Start RabbitMQ and Redis through Docker Compose |
+| `pnpm build`       | Build all packages and applications             |
+| `pnpm check-types` | Run TypeScript checks across the workspace      |
+| `pnpm lint`        | Run linting tasks                               |
+| `pnpm docker:up`   | Start the full local Docker stack               |
+| `pnpm docker:down` | Stop the local Docker stack                     |
+| `pnpm docker:logs` | Stream container logs                           |
 
 ---
 
