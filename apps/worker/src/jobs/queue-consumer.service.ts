@@ -10,8 +10,14 @@ import amqp, {
 } from 'amqplib';
 import { getWorkerRuntimeConfig } from '@repo/config';
 import type { ScrapeJobMessage } from '@repo/queue-contracts';
+import {
+  createTargetedDeadLetterQueueName,
+  createTargetedQueueName,
+  createTargetedRetryQueueName,
+} from '@repo/shared';
 import { JobProcessorService } from './job-processor.service';
 import { JobStoreService } from './job-store.service';
+import { WorkerHeartbeatService } from './worker-heartbeat.service';
 import {
   logJobFailure,
   logJobRetry,
@@ -29,7 +35,31 @@ export class QueueConsumerService
   constructor(
     private readonly processor: JobProcessorService,
     private readonly jobStore: JobStoreService,
+    private readonly workerHeartbeat: WorkerHeartbeatService,
   ) {}
+
+  private getRoutingQueues(targetWorkerId?: string) {
+    const config = getWorkerRuntimeConfig();
+    if (!targetWorkerId) {
+      return {
+        queueName: config.queue.queueName,
+        retryQueueName: config.queue.retryQueueName,
+        deadLetterQueueName: config.queue.deadLetterQueueName,
+      };
+    }
+
+    return {
+      queueName: createTargetedQueueName(config.queue.queueName, targetWorkerId),
+      retryQueueName: createTargetedRetryQueueName(
+        config.queue.queueName,
+        targetWorkerId,
+      ),
+      deadLetterQueueName: createTargetedDeadLetterQueueName(
+        config.queue.queueName,
+        targetWorkerId,
+      ),
+    };
+  }
 
   async onApplicationBootstrap() {
     const config = getWorkerRuntimeConfig();
@@ -47,6 +77,8 @@ export class QueueConsumerService
       );
     }
 
+    const targetedQueues = this.workerHeartbeat.getTargetedQueues();
+
     await channel.assertQueue(config.queue.queueName, { durable: true });
     await channel.assertQueue(config.queue.retryQueueName, {
       durable: true,
@@ -56,10 +88,24 @@ export class QueueConsumerService
     await channel.assertQueue(config.queue.deadLetterQueueName, {
       durable: true,
     });
+    await channel.assertQueue(targetedQueues.queueName, { durable: true });
+    await channel.assertQueue(targetedQueues.retryQueueName, {
+      durable: true,
+      deadLetterExchange: '',
+      deadLetterRoutingKey: targetedQueues.queueName,
+    });
+    await channel.assertQueue(targetedQueues.deadLetterQueueName, {
+      durable: true,
+    });
     await channel.prefetch(1);
 
     await channel.consume(
       config.queue.queueName,
+      async (message: ConsumeMessage | null) => this.handleMessage(message),
+      { noAck: false },
+    );
+    await channel.consume(
+      targetedQueues.queueName,
       async (message: ConsumeMessage | null) => this.handleMessage(message),
       { noAck: false },
     );
@@ -82,6 +128,7 @@ export class QueueConsumerService
       Number(message.properties.headers?.['x-delivery-attempt'] ?? 1) ||
       payload.deliveryAttempt ||
       1;
+    const routingQueues = this.getRoutingQueues(payload.targetWorkerId);
 
     try {
       await this.processor.process(payload);
@@ -93,7 +140,7 @@ export class QueueConsumerService
       if (currentAttempt < config.queue.maxDeliveryAttempts) {
         await this.jobStore.updateStatus(payload.jobId, 'queued', errorMessage);
         this.channel.sendToQueue(
-          config.queue.retryQueueName,
+          routingQueues.retryQueueName,
           Buffer.from(
             JSON.stringify({
               ...payload,
@@ -126,11 +173,12 @@ export class QueueConsumerService
         requestedAt: payload.requestedAt,
         completedAt: new Date().toISOString(),
         retries: currentAttempt - 1,
+        targetWorkerId: payload.targetWorkerId,
         retriedFromJobId: payload.retriedFromJobId,
         error: errorMessage,
       });
       this.channel.sendToQueue(
-        config.queue.deadLetterQueueName,
+        routingQueues.deadLetterQueueName,
         Buffer.from(
           JSON.stringify({
             ...payload,
@@ -165,8 +213,9 @@ export class QueueConsumerService
     return {
       connected: Boolean(this.connection && this.channel && this.consuming),
       queueName: config.queue.queueName,
-      retryQueueName: config.queue.retryQueueName,
-      deadLetterQueueName: config.queue.deadLetterQueueName,
+      retryQueueName: this.workerHeartbeat.getTargetedQueues().retryQueueName,
+      deadLetterQueueName:
+        this.workerHeartbeat.getTargetedQueues().deadLetterQueueName,
     };
   }
 }

@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Clock3,
+  Crosshair,
   LoaderCircle,
   LogOut,
   PanelTop,
@@ -246,6 +247,11 @@ export function DashboardClient({
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
   const [newKeyLabel, setNewKeyLabel] = useState("Default scraper client");
   const [newApiKeyValue, setNewApiKeyValue] = useState<string | null>(null);
+  const [creatingJob, setCreatingJob] = useState(false);
+  const [createJobError, setCreateJobError] = useState<string | null>(null);
+  const [createJobUrl, setCreateJobUrl] = useState("https://example.com");
+  const [createJobStrategy, setCreateJobStrategy] = useState<"auto" | "cloudscraper" | "playwright">("auto");
+  const [createJobWorkerId, setCreateJobWorkerId] = useState("");
 
   const loadOverview = useCallback(async () => {
     const snapshot = await fetchJson<JobsOverviewSnapshot>(
@@ -333,6 +339,36 @@ export function DashboardClient({
     );
     await loadApiKeys();
     setRevokingKeyId(null);
+  };
+
+  const handleCreateJob = async () => {
+    setCreatingJob(true);
+    setCreateJobError(null);
+
+    const payload = {
+      url: createJobUrl.trim(),
+      strategy: createJobStrategy,
+      ...(createJobWorkerId ? { targetWorkerId: createJobWorkerId } : {}),
+    };
+
+    const created = await fetchJson<EnqueueJobResponse>(`${apiBaseUrl}/jobs`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    if (!created) {
+      setCreateJobError(
+        createJobWorkerId
+          ? "Unable to create the job. Make sure the selected worker is still active."
+          : "Unable to create the job right now.",
+      );
+      setCreatingJob(false);
+      return;
+    }
+
+    await handleRefresh();
+    setSelectedJobId(created.jobId);
+    setCreatingJob(false);
   };
 
   useEffect(() => {
@@ -426,6 +462,13 @@ export function DashboardClient({
     () =>
       overview?.recentJobs.find((job) => job.jobId === selectedJobId) ?? null,
     [overview, selectedJobId],
+  );
+  const workerOptions = useMemo(
+    () =>
+      [...(overview?.workers ?? [])].sort((left, right) =>
+        left.hostname.localeCompare(right.hostname),
+      ),
+    [overview?.workers],
   );
 
   const handleRefresh = async () => {
@@ -580,6 +623,122 @@ export function DashboardClient({
         <section className="grid gap-6 xl:grid-cols-12">
           <Card className="border-border/60 bg-card/90 xl:col-span-8">
             <CardHeader className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle className="text-2xl">Dispatch a job</CardTitle>
+                  <CardDescription>
+                    Send workload to the shared queue or pin it to a specific worker instance.
+                  </CardDescription>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-primary/10 p-2.5 text-primary">
+                  <Crosshair className="size-5" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(220px,0.7fr)_minmax(240px,0.9fr)]">
+                <label className="space-y-2 text-sm">
+                  <span className="font-medium text-foreground">Target URL</span>
+                  <input
+                    value={createJobUrl}
+                    onChange={(event) => setCreateJobUrl(event.target.value)}
+                    placeholder="https://target-site.example"
+                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary"
+                  />
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="font-medium text-foreground">Strategy</span>
+                  <select
+                    value={createJobStrategy}
+                    onChange={(event) =>
+                      setCreateJobStrategy(
+                        event.target.value as
+                          | "auto"
+                          | "cloudscraper"
+                          | "playwright",
+                      )
+                    }
+                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary"
+                  >
+                    <option value="auto">Auto fallback</option>
+                    <option value="cloudscraper">Cloudscraper</option>
+                    <option value="playwright">Playwright</option>
+                  </select>
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="font-medium text-foreground">Worker target</span>
+                  <select
+                    value={createJobWorkerId}
+                    onChange={(event) => setCreateJobWorkerId(event.target.value)}
+                    className="w-full rounded-xl border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-primary"
+                  >
+                    <option value="">Auto assign via shared queue</option>
+                    {workerOptions.map((worker) => (
+                      <option key={worker.workerId} value={worker.workerId}>
+                        {worker.hostname} ({worker.workerId})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-muted/35 p-4 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">
+                    {createJobWorkerId
+                      ? "Targeted dispatch"
+                      : "Auto assignment"}
+                  </p>
+                  <p>
+                    {createJobWorkerId
+                      ? "The job will be published only to the selected worker queue and will wait there until that worker is available."
+                      : "The job will be published to the shared queue so any active worker can pick it up."}
+                  </p>
+                </div>
+                <Button
+                  className="rounded-full"
+                  onClick={handleCreateJob}
+                  disabled={creatingJob || !createJobUrl.trim()}
+                >
+                  {creatingJob ? (
+                    <LoaderCircle className="mr-2 size-4 animate-spin" />
+                  ) : (
+                    <Rabbit className="mr-2 size-4" />
+                  )}
+                  Create job
+                </Button>
+              </div>
+              {createJobError ? (
+                <div className="rounded-xl border border-border bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  {createJobError}
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="border-border/60 bg-card/90 xl:col-span-4">
+            <CardHeader>
+              <CardTitle className="text-xl">Dispatch guidance</CardTitle>
+              <CardDescription>
+                Choose when to pin jobs to a worker and when to stay on auto routing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-muted-foreground">
+              <div className="rounded-xl border border-border/70 bg-muted/40 p-4">
+                Use <span className="font-medium text-foreground">Auto assign</span> for normal throughput and better balancing across the fleet.
+              </div>
+              <div className="rounded-xl border border-border/70 bg-muted/40 p-4">
+                Use a specific <span className="font-medium text-foreground">worker</span> when you need a known host, a warmed browser context, or a pinned execution environment.
+              </div>
+              <div className="rounded-xl border border-border/70 bg-muted/40 p-4">
+                Targeted jobs keep their worker affinity during retry, so operational behavior stays predictable.
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-12">
+          <Card className="border-border/60 bg-card/90 xl:col-span-8">
+            <CardHeader className="space-y-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <CardTitle className="text-2xl">Recent jobs</CardTitle>
@@ -603,6 +762,7 @@ export function DashboardClient({
                       <TableHead>Status</TableHead>
                       <TableHead>Strategy</TableHead>
                       <TableHead>Target</TableHead>
+                      <TableHead>URL</TableHead>
                       <TableHead>Updated</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -631,6 +791,17 @@ export function DashboardClient({
                         </TableCell>
                         <TableCell className="uppercase tracking-wide text-muted-foreground">
                           {job.strategy}
+                        </TableCell>
+                        <TableCell className="max-w-52 truncate text-foreground/90">
+                          {job.targetWorkerId ? (
+                            <span title={job.targetWorkerId}>
+                              {job.targetWorkerId}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              Auto assign
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell className="max-w-88 truncate text-foreground/90">
                           {job.url}
@@ -829,6 +1000,12 @@ export function DashboardClient({
                         {formatRelativeTime(selectedJob.updatedAt)}
                       </p>
                     </div>
+                    <div>
+                      <p className="text-muted-foreground">Target worker</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {selectedJob.targetWorkerId ?? "Auto assign"}
+                      </p>
+                    </div>
                     {selectedJob.retriedFromJobId ? (
                       <div className="md:col-span-2">
                         <p className="text-muted-foreground">Retried from</p>
@@ -885,6 +1062,12 @@ export function DashboardClient({
                           <p className="text-muted-foreground">Retries</p>
                           <p className="mt-1 font-medium text-foreground">
                             {selectedResult.retries ?? 0}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Target worker</p>
+                          <p className="mt-1 font-medium text-foreground">
+                            {selectedResult.targetWorkerId ?? "Auto assign"}
                           </p>
                         </div>
                         <div>

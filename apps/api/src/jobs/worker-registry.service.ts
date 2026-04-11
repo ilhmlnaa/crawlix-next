@@ -40,4 +40,14 @@ export class WorkerRegistryService {
       .filter((worker): worker is WorkerHeartbeat => Boolean(worker))
       .sort((left, right) => right.lastSeenAt.localeCompare(left.lastSeenAt));
   }
+
+  async getWorkerById(workerId: string): Promise<WorkerHeartbeat | null> {
+    const client = this.redisService.getClient();
+    await client.connect().catch(() => undefined);
+    const raw = await client.get(
+      createWorkerHeartbeatKey(this.config.redis.jobPrefix, workerId),
+    );
+
+    return raw ? (JSON.parse(raw) as WorkerHeartbeat) : null;
+  }
 }

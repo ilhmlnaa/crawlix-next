@@ -36,6 +36,7 @@ export interface CreateScrapeJobInput {
   url: string;
   strategy?: ScrapeStrategy;
   options?: ScrapeJobOptions;
+  targetWorkerId?: string;
 }
 
 export interface ScrapeJobMessage {
@@ -45,6 +46,7 @@ export interface ScrapeJobMessage {
   options: ScrapeJobOptions;
   requestedAt: string;
   fingerprint: string;
+  targetWorkerId?: string;
   retriedFromJobId?: string;
   deliveryAttempt?: number;
 }
@@ -58,6 +60,7 @@ export interface ScrapeJobRecord {
   updatedAt: string;
   fingerprint: string;
   options: ScrapeJobOptions;
+  targetWorkerId?: string;
   retriedFromJobId?: string;
   error?: string;
 }
@@ -76,6 +79,7 @@ export interface ScrapeJobResult {
   responseTimeMs?: number;
   retries?: number;
   cached?: boolean;
+  targetWorkerId?: string;
   retriedFromJobId?: string;
   error?: string;
 }
@@ -85,6 +89,7 @@ export interface EnqueueJobResponse {
   status: ScrapeJobStatus;
   queuedAt: string;
   resultTtlSeconds: number;
+  targetWorkerId?: string;
   retriedFromJobId?: string;
 }
 
@@ -98,6 +103,9 @@ export interface WorkerHeartbeat {
   workerId: string;
   serviceName: string;
   queueName: string;
+  targetedQueueName: string;
+  retryQueueName: string;
+  deadLetterQueueName: string;
   hostname: string;
   pid: number;
   status: 'idle' | 'processing';

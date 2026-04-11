@@ -3,6 +3,9 @@ import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/com
 import { getWorkerRuntimeConfig } from '@repo/config';
 import type { WorkerHeartbeat } from '@repo/queue-contracts';
 import {
+  createTargetedDeadLetterQueueName,
+  createTargetedQueueName,
+  createTargetedRetryQueueName,
   createWorkerHeartbeatKey,
   createWorkersIndexKey,
 } from '@repo/shared';
@@ -36,11 +39,34 @@ export class WorkerHeartbeatService
     return createWorkersIndexKey(this.config.redis.jobPrefix);
   }
 
+  getWorkerId() {
+    return this.workerId;
+  }
+
+  getTargetedQueues() {
+    return {
+      queueName: createTargetedQueueName(this.config.queue.queueName, this.workerId),
+      retryQueueName: createTargetedRetryQueueName(
+        this.config.queue.queueName,
+        this.workerId,
+      ),
+      deadLetterQueueName: createTargetedDeadLetterQueueName(
+        this.config.queue.queueName,
+        this.workerId,
+      ),
+    };
+  }
+
   private createPayload(): WorkerHeartbeat {
+    const targetedQueues = this.getTargetedQueues();
+
     return {
       workerId: this.workerId,
       serviceName: this.config.serviceName,
       queueName: this.config.queue.queueName,
+      targetedQueueName: targetedQueues.queueName,
+      retryQueueName: targetedQueues.retryQueueName,
+      deadLetterQueueName: targetedQueues.deadLetterQueueName,
       hostname: os.hostname(),
       pid: process.pid,
       status: this.status,

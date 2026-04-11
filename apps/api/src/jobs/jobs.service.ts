@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { getApiRuntimeConfig } from '@repo/config';
 import {
   DEFAULT_JOB_STATUS,
@@ -8,6 +8,7 @@ import {
   type JobsOverviewSnapshot,
   type ScrapeJobMessage,
   type ScrapeJobRecord,
+  type WorkerHeartbeat,
 } from '@repo/queue-contracts';
 import {
   createJobId,
@@ -47,6 +48,16 @@ export class JobsService {
     };
     const jobId = createJobId();
     const fingerprint = createQueueFingerprint(input.url, strategy, options);
+    const targetWorkerId = input.targetWorkerId?.trim() || undefined;
+
+    if (targetWorkerId) {
+      const worker = await this.workerRegistry.getWorkerById(targetWorkerId);
+      if (!worker) {
+        throw new NotFoundException(
+          `Target worker "${targetWorkerId}" is not active`,
+        );
+      }
+    }
 
     const record: ScrapeJobRecord = {
       jobId,
@@ -57,6 +68,7 @@ export class JobsService {
       requestedAt,
       updatedAt: requestedAt,
       fingerprint,
+      targetWorkerId,
       retriedFromJobId,
     };
 
@@ -67,6 +79,7 @@ export class JobsService {
       options,
       requestedAt,
       fingerprint,
+      targetWorkerId,
       retriedFromJobId,
     };
 
@@ -78,6 +91,7 @@ export class JobsService {
       status: DEFAULT_JOB_STATUS,
       queuedAt: requestedAt,
       resultTtlSeconds: config.redis.resultTtlSeconds,
+      targetWorkerId,
       retriedFromJobId,
     };
   }
@@ -94,6 +108,7 @@ export class JobsService {
         url: existing.url,
         strategy: existing.strategy,
         options: existing.options,
+        targetWorkerId: existing.targetWorkerId,
       },
       existing.jobId,
     );
@@ -170,5 +185,9 @@ export class JobsService {
       workers,
       recentJobs,
     };
+  }
+
+  async listWorkers(): Promise<WorkerHeartbeat[]> {
+    return this.workerRegistry.listWorkers();
   }
 }

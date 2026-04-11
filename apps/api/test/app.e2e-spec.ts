@@ -6,6 +6,10 @@ import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { QueuePublisherService } from './../src/infrastructure/queue-publisher.service';
 import { RedisService } from './../src/infrastructure/redis.service';
+import {
+  createWorkerHeartbeatKey,
+  createWorkersIndexKey,
+} from '@repo/shared';
 
 class FakeRedisClient {
   private readonly values = new Map<string, string>();
@@ -85,6 +89,15 @@ class FakeRedisService {
   getClient() {
     return this.client;
   }
+
+  async seedWorker(worker: Record<string, unknown>, prefix = 'crawlix:test') {
+    const workerId = worker.workerId as string;
+    await this.client.sadd(createWorkersIndexKey(prefix), workerId);
+    await this.client.set(
+      createWorkerHeartbeatKey(prefix, workerId),
+      JSON.stringify(worker),
+    );
+  }
 }
 
 class FakeQueuePublisherService {
@@ -135,12 +148,29 @@ describe('API auth and jobs flow (e2e)', () => {
     process.env.SCRAPER_RETRY_DELAY_MS = '1000';
 
     queuePublisher = new FakeQueuePublisherService();
+    const fakeRedis = new FakeRedisService();
+    await fakeRedis.seedWorker({
+      workerId: 'worker-host123-4567',
+      serviceName: 'crawlix-worker',
+      queueName: 'crawlix.scrape.jobs',
+      targetedQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567',
+      retryQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567.retry',
+      deadLetterQueueName:
+        'crawlix.scrape.jobs.worker.worker-host123-4567.dlq',
+      hostname: 'host123',
+      pid: 4567,
+      status: 'idle',
+      startedAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+      processedCount: 11,
+      failedCount: 1,
+    });
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(RedisService)
-      .useValue(new FakeRedisService())
+      .useValue(fakeRedis)
       .overrideProvider(QueuePublisherService)
       .useValue(queuePublisher)
       .compile();
@@ -194,6 +224,10 @@ describe('API auth and jobs flow (e2e)', () => {
 
     const apiKey = createKeyResponse.body.apiKey as string;
 
+    const workersResponse = await agent.get('/api/workers').expect(200);
+    expect(Array.isArray(workersResponse.body)).toBe(true);
+    expect(workersResponse.body[0].workerId).toBe('worker-host123-4567');
+
     await request(app)
       .post('/api/jobs')
       .send({ url: 'https://example.com' })
@@ -214,6 +248,32 @@ describe('API auth and jobs flow (e2e)', () => {
 
     expect(statusResponse.body.url).toBe('https://example.com');
 
+    const targetedEnqueue = await request(app)
+      .post('/api/jobs')
+      .set('x-api-key', apiKey)
+      .send({
+        url: 'https://example.net',
+        targetWorkerId: 'worker-host123-4567',
+      })
+      .expect(201);
+
+    expect(targetedEnqueue.body.targetWorkerId).toBe('worker-host123-4567');
+
+    const targetedStatus = await request(app)
+      .get(`/api/jobs/${targetedEnqueue.body.jobId}`)
+      .set('x-api-key', apiKey)
+      .expect(200);
+    expect(targetedStatus.body.targetWorkerId).toBe('worker-host123-4567');
+
+    await request(app)
+      .post('/api/jobs')
+      .set('x-api-key', apiKey)
+      .send({
+        url: 'https://example.invalid',
+        targetWorkerId: 'missing-worker',
+      })
+      .expect(404);
+
     const overviewResponse = await agent.get('/api/jobs/overview').expect(200);
     expect(overviewResponse.body.queueDepth).toBeGreaterThanOrEqual(1);
     expect(overviewResponse.body.retryQueueDepth).toBe(1);
@@ -225,9 +285,10 @@ describe('API auth and jobs flow (e2e)', () => {
     expect(cancelResponse.body.status).toBe('cancelled');
 
     const retryResponse = await agent
-      .post(`/api/jobs/${enqueueResponse.body.jobId}/retry`)
+      .post(`/api/jobs/${targetedEnqueue.body.jobId}/retry`)
       .expect(201);
-    expect(retryResponse.body.retriedFromJobId).toBe(enqueueResponse.body.jobId);
+    expect(retryResponse.body.retriedFromJobId).toBe(targetedEnqueue.body.jobId);
+    expect(retryResponse.body.targetWorkerId).toBe('worker-host123-4567');
 
     const revokeResponse = await agent
       .post(`/api/admin/api-keys/${createKeyResponse.body.record.keyId}/revoke`)

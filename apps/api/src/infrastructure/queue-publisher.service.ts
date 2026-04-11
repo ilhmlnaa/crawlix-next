@@ -2,6 +2,11 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import amqp, { type Channel, type ChannelModel } from 'amqplib';
 import { getApiRuntimeConfig } from '@repo/config';
 import type { ScrapeJobMessage } from '@repo/queue-contracts';
+import {
+  createTargetedDeadLetterQueueName,
+  createTargetedQueueName,
+  createTargetedRetryQueueName,
+} from '@repo/shared';
 
 export interface QueueStatsSnapshot {
   messageCount: number;
@@ -42,12 +47,55 @@ export class QueuePublisherService implements OnModuleDestroy {
     return channel;
   }
 
-  async publish(job: ScrapeJobMessage): Promise<void> {
-    const channel = await this.getChannel();
+  private resolveQueues(targetWorkerId?: string) {
     const config = getApiRuntimeConfig();
+    if (!targetWorkerId) {
+      return {
+        queueName: config.queue.queueName,
+        retryQueueName: config.queue.retryQueueName,
+        deadLetterQueueName: config.queue.deadLetterQueueName,
+      };
+    }
+
+    return {
+      queueName: createTargetedQueueName(config.queue.queueName, targetWorkerId),
+      retryQueueName: createTargetedRetryQueueName(
+        config.queue.queueName,
+        targetWorkerId,
+      ),
+      deadLetterQueueName: createTargetedDeadLetterQueueName(
+        config.queue.queueName,
+        targetWorkerId,
+      ),
+    };
+  }
+
+  private async assertQueuesForTarget(targetWorkerId?: string) {
+    const channel = await this.getChannel();
+    const queues = this.resolveQueues(targetWorkerId);
+
+    await channel.assertQueue(queues.queueName, {
+      durable: true,
+    });
+    await channel.assertQueue(queues.retryQueueName, {
+      durable: true,
+      deadLetterExchange: '',
+      deadLetterRoutingKey: queues.queueName,
+    });
+    await channel.assertQueue(queues.deadLetterQueueName, {
+      durable: true,
+    });
+
+    return { channel, queues };
+  }
+
+  async publish(job: ScrapeJobMessage): Promise<void> {
+    const { channel, queues } = await this.assertQueuesForTarget(
+      job.targetWorkerId,
+    );
 
     channel.sendToQueue(
-      config.queue.queueName,
+      queues.queueName,
       Buffer.from(JSON.stringify(job)),
       { persistent: true },
     );
@@ -57,11 +105,12 @@ export class QueuePublisherService implements OnModuleDestroy {
     job: ScrapeJobMessage,
     deliveryAttempt: number,
   ): Promise<void> {
-    const channel = await this.getChannel();
-    const config = getApiRuntimeConfig();
+    const { channel, queues } = await this.assertQueuesForTarget(
+      job.targetWorkerId,
+    );
 
     channel.sendToQueue(
-      config.queue.retryQueueName,
+      queues.retryQueueName,
       Buffer.from(
         JSON.stringify({
           ...job,
@@ -70,7 +119,7 @@ export class QueuePublisherService implements OnModuleDestroy {
       ),
       {
         persistent: true,
-        expiration: String(config.queue.retryDelayMs),
+        expiration: String(getApiRuntimeConfig().queue.retryDelayMs),
         headers: {
           'x-delivery-attempt': deliveryAttempt,
         },
@@ -83,11 +132,12 @@ export class QueuePublisherService implements OnModuleDestroy {
     deliveryAttempt: number,
     reason: string,
   ): Promise<void> {
-    const channel = await this.getChannel();
-    const config = getApiRuntimeConfig();
+    const { channel, queues } = await this.assertQueuesForTarget(
+      job.targetWorkerId,
+    );
 
     channel.sendToQueue(
-      config.queue.deadLetterQueueName,
+      queues.deadLetterQueueName,
       Buffer.from(
         JSON.stringify({
           ...job,

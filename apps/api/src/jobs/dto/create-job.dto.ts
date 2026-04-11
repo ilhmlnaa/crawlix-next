@@ -91,4 +91,8 @@ export class CreateJobDto {
   @ValidateNested()
   @Type(() => CreateJobOptionsDto)
   options?: CreateJobOptionsDto;
+
+  @IsOptional()
+  @IsString()
+  targetWorkerId?: string;
 }

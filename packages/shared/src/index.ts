@@ -67,6 +67,31 @@ export function createWorkerHeartbeatKey(prefix: string, workerId: string): stri
   return `${prefix}:worker:${workerId}`;
 }
 
+function sanitizeQueueSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '-');
+}
+
+export function createTargetedQueueName(
+  queueName: string,
+  workerId: string,
+): string {
+  return `${queueName}.worker.${sanitizeQueueSegment(workerId)}`;
+}
+
+export function createTargetedRetryQueueName(
+  queueName: string,
+  workerId: string,
+): string {
+  return `${createTargetedQueueName(queueName, workerId)}.retry`;
+}
+
+export function createTargetedDeadLetterQueueName(
+  queueName: string,
+  workerId: string,
+): string {
+  return `${createTargetedQueueName(queueName, workerId)}.dlq`;
+}
+
 export function createQueueFingerprint(
   url: string,
   strategy: string,

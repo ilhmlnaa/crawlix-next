@@ -26,6 +26,7 @@ export class JobProcessorService implements OnModuleDestroy {
         strategy: job.strategy,
         requestedAt: job.requestedAt,
         completedAt: new Date().toISOString(),
+        targetWorkerId: job.targetWorkerId,
         retriedFromJobId: job.retriedFromJobId,
         error: 'Job was cancelled before processing started.',
       });
@@ -40,6 +41,7 @@ export class JobProcessorService implements OnModuleDestroy {
         job.options.useCache === false ? null : await this.scrapeCache.get(job);
       const result = {
         ...(cachedResult ?? (await this.scraper.execute(job))),
+        targetWorkerId: job.targetWorkerId,
         retriedFromJobId: job.retriedFromJobId,
       };
 

@@ -2,6 +2,15 @@ import type { ConsumeMessage } from 'amqplib';
 import { QueueConsumerService } from '../src/jobs/queue-consumer.service';
 
 describe('QueueConsumerService retry and DLQ flow', () => {
+  const workerHeartbeat = {
+    getWorkerId: jest.fn().mockReturnValue('worker-host123-4567'),
+    getTargetedQueues: jest.fn().mockReturnValue({
+      queueName: 'crawlix.scrape.jobs.worker.worker-host123-4567',
+      retryQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567.retry',
+      deadLetterQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567.dlq',
+    }),
+  };
+
   beforeAll(() => {
     process.env.WORKER_SERVICE_NAME = 'crawlix-worker';
     process.env.PORT = '3002';
@@ -33,6 +42,7 @@ describe('QueueConsumerService retry and DLQ flow', () => {
     const service = new QueueConsumerService(
       processor as never,
       jobStore as never,
+      workerHeartbeat as never,
     );
 
     const channel = {
@@ -89,6 +99,7 @@ describe('QueueConsumerService retry and DLQ flow', () => {
     const service = new QueueConsumerService(
       processor as never,
       jobStore as never,
+      workerHeartbeat as never,
     );
 
     const channel = {
@@ -135,5 +146,57 @@ describe('QueueConsumerService retry and DLQ flow', () => {
       expect.any(Object),
     );
     expect(channel.ack).toHaveBeenCalledWith(message);
+  });
+
+  it('routes targeted jobs into worker-specific retry queue', async () => {
+    const processor = {
+      process: jest.fn().mockRejectedValue(new Error('temporary failure')),
+    };
+    const jobStore = {
+      updateStatus: jest.fn().mockResolvedValue(null),
+      saveResult: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new QueueConsumerService(
+      processor as never,
+      jobStore as never,
+      workerHeartbeat as never,
+    );
+
+    const channel = {
+      sendToQueue: jest.fn(),
+      ack: jest.fn(),
+    };
+
+    (service as unknown as { channel: typeof channel }).channel = channel;
+
+    const message = {
+      content: Buffer.from(
+        JSON.stringify({
+          jobId: 'job-3',
+          url: 'https://targeted.example.com',
+          strategy: 'auto',
+          options: {},
+          requestedAt: new Date().toISOString(),
+          fingerprint: 'fingerprint-3',
+          targetWorkerId: 'worker-host123-4567',
+        }),
+      ),
+      properties: {
+        headers: {
+          'x-delivery-attempt': 1,
+        },
+      },
+    } as unknown as ConsumeMessage;
+
+    await (service as unknown as { handleMessage: (message: ConsumeMessage) => Promise<void> }).handleMessage(message);
+
+    expect(channel.sendToQueue).toHaveBeenCalledWith(
+      'crawlix.scrape.jobs.worker.worker-host123-4567.retry',
+      expect.any(Buffer),
+      expect.objectContaining({
+        expiration: '15000',
+      }),
+    );
   });
 });

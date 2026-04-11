@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
-import { ApiKeyGuard } from '../auth/guards/api-key.guard';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { SessionOrApiKeyGuard } from '../auth/guards/session-or-api-key.guard';
 import { JobsService } from './jobs.service';
