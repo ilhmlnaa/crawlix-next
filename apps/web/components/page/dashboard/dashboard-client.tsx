@@ -1,6 +1,12 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   Activity,
   AlertTriangle,
@@ -8,6 +14,7 @@ import {
   Clock3,
   LoaderCircle,
   LogOut,
+  PanelTop,
   Rabbit,
   RefreshCw,
   RotateCcw,
@@ -46,15 +53,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { LoginPanel } from "@/app/login-panel";
 import { ApiKeyPanel } from "./api-key-panel";
-import { LoginPanel } from "./login-panel";
 
 function formatRelativeTime(value?: string): string {
   if (!value) {
     return "-";
   }
 
-  return new Intl.DateTimeFormat("id-ID", {
+  return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
@@ -62,28 +69,28 @@ function formatRelativeTime(value?: string): string {
 
 function statusBadgeClass(status: ScrapeJobRecord["status"]) {
   if (status === "completed") {
-    return "border-emerald-200 bg-emerald-100 text-emerald-700";
+    return "border-border bg-primary/15 text-primary";
   }
 
   if (status === "processing") {
-    return "border-sky-200 bg-sky-100 text-sky-700";
+    return "border-border bg-accent/25 text-accent-foreground";
   }
 
   if (status === "failed") {
-    return "border-rose-200 bg-rose-100 text-rose-700";
+    return "border-border bg-destructive/15 text-destructive";
   }
 
   if (status === "cancelled") {
-    return "border-zinc-300 bg-zinc-100 text-zinc-700";
+    return "border-border bg-muted text-muted-foreground";
   }
 
-  return "border-amber-200 bg-amber-100 text-amber-700";
+  return "border-border bg-secondary text-secondary-foreground";
 }
 
 function workerBadgeClass(status: WorkerHeartbeat["status"]) {
   return status === "processing"
-    ? "border-sky-200 bg-sky-100 text-sky-700"
-    : "border-zinc-200 bg-zinc-100 text-zinc-700";
+    ? "border-border bg-accent/25 text-accent-foreground"
+    : "border-border bg-muted text-muted-foreground";
 }
 
 function MetricCard({
@@ -98,22 +105,22 @@ function MetricCard({
   icon: ComponentType<{ className?: string }>;
 }) {
   return (
-    <Card className="border-white/70 bg-white/85 shadow-[0_24px_80px_-45px_rgba(15,23,42,0.5)] backdrop-blur">
-      <CardHeader className="flex flex-row items-start justify-between space-y-0">
+    <Card className="border-border/60 bg-card/90">
+      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
         <div>
-          <CardDescription className="text-xs uppercase tracking-[0.25em] text-muted-foreground/80">
+          <CardDescription className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground/90">
             {title}
           </CardDescription>
-          <CardTitle className="mt-3 text-3xl font-semibold tracking-tight text-foreground">
+          <CardTitle className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
             {value}
           </CardTitle>
         </div>
-        <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+        <div className="rounded-lg border border-border/70 bg-primary/10 p-2.5 text-primary">
           <Icon className="size-5" />
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground">{hint}</p>
+        <p className="text-xs text-muted-foreground md:text-sm">{hint}</p>
       </CardContent>
     </Card>
   );
@@ -121,31 +128,35 @@ function MetricCard({
 
 function WorkerCard({ worker }: { worker: WorkerHeartbeat }) {
   return (
-    <Card className="border-white/70 bg-white/90 shadow-[0_24px_80px_-45px_rgba(15,23,42,0.5)]">
-      <CardHeader className="space-y-3">
+    <Card className="border-border/60 bg-card/90">
+      <CardHeader className="space-y-2 pb-2">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <CardTitle className="text-base">{worker.serviceName}</CardTitle>
-            <CardDescription>{worker.workerId}</CardDescription>
+            <CardTitle className="text-sm md:text-base">
+              {worker.serviceName}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {worker.workerId}
+            </CardDescription>
           </div>
           <Badge
             className={cn(
-              "rounded-full border px-3 py-1",
+              "rounded-full border px-2.5 py-0.5 text-xs",
               workerBadgeClass(worker.status),
             )}
           >
             {worker.status}
           </Badge>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
+        <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground md:text-sm">
           <div>Host: {worker.hostname}</div>
           <div>PID: {worker.pid}</div>
           <div>Processed: {worker.processedCount}</div>
           <div>Failed: {worker.failedCount}</div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm text-muted-foreground">
-        <div className="rounded-2xl bg-secondary/70 px-4 py-3">
+      <CardContent className="space-y-2 text-xs text-muted-foreground md:text-sm">
+        <div className="rounded-lg bg-muted px-3 py-2.5">
           Current job:{" "}
           {worker.currentJobId ? worker.currentJobId.slice(0, 12) : "idle"}
         </div>
@@ -236,7 +247,7 @@ export function DashboardClient({
   const [newKeyLabel, setNewKeyLabel] = useState("Default scraper client");
   const [newApiKeyValue, setNewApiKeyValue] = useState<string | null>(null);
 
-  const loadOverview = async () => {
+  const loadOverview = useCallback(async () => {
     const snapshot = await fetchJson<JobsOverviewSnapshot>(
       `${apiBaseUrl}/jobs/overview`,
     );
@@ -248,16 +259,16 @@ export function DashboardClient({
         );
       });
     }
-  };
+  }, [apiBaseUrl]);
 
-  const loadApiKeys = async () => {
+  const loadApiKeys = useCallback(async () => {
     setLoadingApiKeys(true);
     const keys = await fetchJson<ApiKeyRecord[]>(
       `${apiBaseUrl}/admin/api-keys`,
     );
     setApiKeys(keys ?? []);
     setLoadingApiKeys(false);
-  };
+  }, [apiBaseUrl]);
 
   const handleLogin = async () => {
     setLoggingIn(true);
@@ -271,7 +282,7 @@ export function DashboardClient({
     );
 
     if (!response?.admin) {
-      setLoginError("Email atau password admin tidak valid.");
+      setLoginError("Invalid admin email or password.");
       setLoggingIn(false);
       return;
     }
@@ -351,7 +362,7 @@ export function DashboardClient({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, loadApiKeys, loadOverview]);
 
   useEffect(() => {
     if (!admin) {
@@ -369,7 +380,7 @@ export function DashboardClient({
     }, 10_000);
 
     return () => clearInterval(interval);
-  }, [admin, apiBaseUrl]);
+  }, [admin, apiBaseUrl, loadOverview]);
 
   useEffect(() => {
     if (!admin || !selectedJobId) {
@@ -406,9 +417,11 @@ export function DashboardClient({
   const queued = overview?.statusCounts.queued ?? 0;
   const retryQueueDepth = overview?.retryQueueDepth ?? 0;
   const deadLetterQueueDepth = overview?.deadLetterQueueDepth ?? 0;
+  const totalWorkers = overview?.workers.length ?? 0;
   const activeWorkers =
     overview?.workers.filter((worker) => worker.status === "processing")
       .length ?? 0;
+  const idleWorkers = Math.max(totalWorkers - activeWorkers, 0);
   const selectedJob = useMemo(
     () =>
       overview?.recentJobs.find((job) => job.jobId === selectedJobId) ?? null,
@@ -449,10 +462,10 @@ export function DashboardClient({
 
   if (authLoading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(180deg,#fcfbf7_0%,#f5f2ea_45%,#f7f5ef_100%)]">
-        <div className="flex items-center gap-3 rounded-full border border-white/70 bg-white/85 px-5 py-3 text-sm text-muted-foreground shadow-sm">
+      <main className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex items-center gap-3 rounded-full border border-border/70 bg-card px-5 py-3 text-sm text-muted-foreground">
           <LoaderCircle className="size-4 animate-spin" />
-          Memeriksa session dashboard...
+          Checking dashboard session...
         </div>
       </main>
     );
@@ -473,230 +486,116 @@ export function DashboardClient({
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.18),transparent_28%),radial-gradient(circle_at_top_right,rgba(45,212,191,0.14),transparent_24%),linear-gradient(180deg,#fcfbf7_0%,#f5f2ea_45%,#f7f5ef_100%)] px-4 py-6 md:px-8">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.14),transparent_36%),radial-gradient(circle_at_80%_0%,rgba(34,197,94,0.08),transparent_30%),var(--color-background)] px-4 py-6 md:px-8">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="overflow-hidden rounded-[2rem] border border-white/70 bg-[linear-gradient(135deg,rgba(255,255,255,0.88),rgba(244,247,250,0.76))] p-6 shadow-[0_32px_120px_-50px_rgba(15,23,42,0.55)] backdrop-blur md:p-8">
-          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl space-y-4">
-              <Badge className="rounded-full border border-primary/20 bg-primary/10 px-4 py-1 text-primary">
-                Crawlix Control Center
-              </Badge>
-              <div className="space-y-3">
-                <h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-balance text-foreground md:text-5xl">
-                  Pantau queue, worker aktif, dan hasil scraping dari satu
-                  dashboard operasional.
-                </h1>
-                <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-                  Dashboard ini melakukan refresh otomatis, menampilkan
-                  heartbeat worker aktif, dan memberi aksi retry langsung dari
-                  panel detail job.
-                </p>
+        <section className="rounded-2xl border border-border/60 bg-card/90 p-5 md:p-6">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge className="rounded-full border border-border bg-muted px-3 py-1 text-xs text-muted-foreground">
+                  Operations
+                </Badge>
+                <Badge className="rounded-full border border-border bg-primary/15 px-3 py-1 text-xs text-primary">
+                  Live monitor
+                </Badge>
               </div>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
+                Crawlix Admin Dashboard
+              </h1>
+              <p className="max-w-3xl text-sm text-muted-foreground md:text-base">
+                A unified control surface for queue throughput, worker activity,
+                and job-level troubleshooting.
+              </p>
             </div>
 
-            <div className="grid gap-3 rounded-[1.75rem] border border-white/70 bg-white/75 p-4 text-sm text-muted-foreground shadow-sm sm:grid-cols-2">
-              <div>
-                <p className="uppercase tracking-[0.24em]">Admin</p>
-                <p className="mt-2 font-medium text-foreground">
+            <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto">
+              <div className="rounded-xl border border-border/70 bg-muted/45 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Signed in as
+                </p>
+                <p className="mt-1 text-sm font-medium text-foreground">
                   {admin.email}
                 </p>
               </div>
-              <div>
-                <p className="uppercase tracking-[0.24em]">Queue</p>
-                <p className="mt-2 font-medium text-foreground">
-                  {overview?.queueName ?? "API belum terhubung"}
+              <div className="rounded-xl border border-border/70 bg-muted/45 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                  Queue target
+                </p>
+                <p className="mt-1 truncate text-sm font-medium text-foreground">
+                  {overview?.queueName ?? "API disconnected"}
                 </p>
               </div>
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2 flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  className="rounded-full"
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                >
+                  <RefreshCw
+                    className={cn("mr-2 size-4", refreshing && "animate-spin")}
+                  />
+                  Sync data
+                </Button>
                 <Button
                   variant="secondary"
                   className="rounded-full"
                   onClick={handleLogout}
                 >
                   <LogOut className="mr-2 size-4" />
-                  Logout
+                  Sign out
                 </Button>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="flex items-center justify-between gap-4 rounded-[1.75rem] border border-white/70 bg-white/80 px-5 py-4 shadow-sm">
-          <div className="text-sm text-muted-foreground">
-            Refresh otomatis setiap 10 detik untuk overview dan worker fleet.
-          </div>
-          <Button
-            variant="secondary"
-            className="rounded-full"
-            onClick={handleRefresh}
-            disabled={refreshing}
-          >
-            <RefreshCw
-              className={cn("mr-2 size-4", refreshing && "animate-spin")}
-            />
-            Refresh sekarang
-          </Button>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard
-            title="Tracked Jobs"
+            title="Tracked jobs"
             value={String(totalJobs)}
-            hint="Snapshot 50 job terbaru yang dibaca untuk monitoring cepat."
+            hint="Records loaded in the current snapshot window."
             icon={Rabbit}
           />
           <MetricCard
-            title="Active Workers"
+            title="Active workers"
             value={String(activeWorkers)}
-            hint="Jumlah worker yang heartbeat-nya aktif dan sedang memproses job."
+            hint={`Idle workers: ${idleWorkers}.`}
             icon={ServerCog}
           />
           <MetricCard
-            title="Completed"
+            title="Completion"
             value={String(completed)}
-            hint="Job yang selesai sukses pada snapshot dashboard saat ini."
+            hint="Successfully processed jobs in this cycle."
             icon={CheckCircle2}
           />
           <MetricCard
-            title="Failed"
+            title="Failures"
             value={String(failed)}
-            hint="Job yang gagal dan perlu investigasi atau retry."
+            hint="Jobs currently requiring intervention."
             icon={AlertTriangle}
           />
-          <MetricCard
-            title="Queue Depth"
-            value={String(overview?.queueDepth ?? 0)}
-            hint={`Consumer broker aktif: ${overview?.consumerCount ?? 0}.`}
-            icon={Activity}
-          />
-          <MetricCard
-            title="Retry Queue"
-            value={String(retryQueueDepth)}
-            hint="Job recoverable yang sedang menunggu percobaan ulang."
-            icon={RotateCcw}
-          />
-          <MetricCard
-            title="DLQ"
-            value={String(deadLetterQueueDepth)}
-            hint="Job yang sudah melewati batas retry."
-            icon={ShieldX}
-          />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="border-white/70 bg-white/88 shadow-[0_24px_90px_-50px_rgba(15,23,42,0.55)]">
+        <section className="grid gap-6 xl:grid-cols-12">
+          <Card className="border-border/60 bg-card/90 xl:col-span-8">
             <CardHeader className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <CardTitle className="text-2xl">Queue health</CardTitle>
+                  <CardTitle className="text-2xl">Recent jobs</CardTitle>
                   <CardDescription>
-                    Distribusi status job terbaru untuk membaca aliran queue
-                    dengan cepat.
+                    Browse incoming jobs and drill into details on the right
+                    panel.
                   </CardDescription>
                 </div>
-                <div className="rounded-2xl bg-primary/10 p-3 text-primary">
-                  <Activity className="size-5" />
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <PanelTop className="size-4" />
+                  Auto-refresh every 10s
                 </div>
               </div>
-              <Separator />
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <QueueProgress label="Queued" value={queued} total={totalJobs} />
-              <QueueProgress
-                label="Processing"
-                value={processing}
-                total={totalJobs}
-              />
-              <QueueProgress
-                label="Completed"
-                value={completed}
-                total={totalJobs}
-              />
-              <QueueProgress label="Failed" value={failed} total={totalJobs} />
-              <QueueProgress
-                label="Cancelled"
-                value={cancelled}
-                total={totalJobs}
-              />
-              <div className="grid gap-3 rounded-[1.5rem] bg-secondary/60 p-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm text-muted-foreground">Idle workers</p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">
-                    {(overview?.workers.length ?? 0) - activeWorkers}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Consumers on broker
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">
-                    {overview?.consumerCount ?? 0}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Retry queue depth
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">
-                    {retryQueueDepth}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">
-                    Dead-letter depth
-                  </p>
-                  <p className="mt-2 text-2xl font-semibold text-foreground">
-                    {deadLetterQueueDepth}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/70 bg-white/88 shadow-[0_24px_90px_-50px_rgba(15,23,42,0.55)]">
-            <CardHeader className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <CardTitle className="text-2xl">Worker fleet</CardTitle>
-                  <CardDescription>
-                    Heartbeat aktif, job yang sedang dikerjakan, dan beban tiap
-                    worker.
-                  </CardDescription>
-                </div>
-                <div className="rounded-2xl bg-accent/20 p-3 text-accent-foreground">
-                  <Clock3 className="size-5" />
-                </div>
-              </div>
-              <Separator />
             </CardHeader>
             <CardContent>
-              {overview?.workers.length ? (
-                <div className="grid gap-4">
-                  {overview.workers.map((worker) => (
-                    <WorkerCard key={worker.workerId} worker={worker} />
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-[1.5rem] border border-dashed border-border bg-secondary/40 px-6 py-8 text-center text-sm text-muted-foreground">
-                  Belum ada heartbeat worker. Jalankan `pnpm dev:worker` atau
-                  container worker agar dashboard bisa mendeteksi instance
-                  aktif.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card className="border-white/70 bg-white/88 shadow-[0_24px_90px_-50px_rgba(15,23,42,0.55)]">
-            <CardHeader>
-              <CardTitle className="text-2xl">Recent jobs</CardTitle>
-              <CardDescription>
-                Klik satu job untuk melihat hasil detail atau retry langsung.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-130 rounded-3xl border border-border/60 bg-white/85">
+              <ScrollArea className="h-128 rounded-xl border border-border/60 bg-background/70">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -712,8 +611,8 @@ export function DashboardClient({
                       <TableRow
                         key={job.jobId}
                         className={cn(
-                          "cursor-pointer transition-colors hover:bg-secondary/55",
-                          selectedJobId === job.jobId && "bg-secondary/65",
+                          "cursor-pointer transition-colors hover:bg-muted/70",
+                          selectedJobId === job.jobId && "bg-muted",
                         )}
                         onClick={() => setSelectedJobId(job.jobId)}
                       >
@@ -733,7 +632,7 @@ export function DashboardClient({
                         <TableCell className="uppercase tracking-wide text-muted-foreground">
                           {job.strategy}
                         </TableCell>
-                        <TableCell className="max-w-90 truncate text-foreground/85">
+                        <TableCell className="max-w-88 truncate text-foreground/90">
                           {job.url}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
@@ -747,14 +646,120 @@ export function DashboardClient({
             </CardContent>
           </Card>
 
-          <Card className="border-white/70 bg-white/88 shadow-[0_24px_90px_-50px_rgba(15,23,42,0.55)]">
+          <div className="grid gap-6 xl:col-span-4">
+            <Card className="border-border/60 bg-card/90">
+              <CardHeader className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-xl">Queue health</CardTitle>
+                    <CardDescription>
+                      Distribution and saturation indicators.
+                    </CardDescription>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-primary/10 p-2.5 text-primary">
+                    <Activity className="size-5" />
+                  </div>
+                </div>
+                <Separator />
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <QueueProgress
+                  label="Queued"
+                  value={queued}
+                  total={totalJobs}
+                />
+                <QueueProgress
+                  label="Processing"
+                  value={processing}
+                  total={totalJobs}
+                />
+                <QueueProgress
+                  label="Completed"
+                  value={completed}
+                  total={totalJobs}
+                />
+                <QueueProgress
+                  label="Failed"
+                  value={failed}
+                  total={totalJobs}
+                />
+                <QueueProgress
+                  label="Cancelled"
+                  value={cancelled}
+                  total={totalJobs}
+                />
+                <div className="grid gap-2 rounded-xl border border-border/70 bg-muted/45 p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Queue depth</span>
+                    <span className="font-medium text-foreground">
+                      {overview?.queueDepth ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Consumers</span>
+                    <span className="font-medium text-foreground">
+                      {overview?.consumerCount ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Retry queue</span>
+                    <span className="font-medium text-foreground">
+                      {retryQueueDepth}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Dead-letter</span>
+                    <span className="font-medium text-foreground">
+                      {deadLetterQueueDepth}
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-border/60 bg-card/90">
+              <CardHeader className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-xl">Worker fleet</CardTitle>
+                    <CardDescription>
+                      Heartbeat and throughput per worker instance.
+                    </CardDescription>
+                  </div>
+                  <div className="rounded-xl border border-border/70 bg-accent/20 p-2.5 text-accent-foreground">
+                    <Clock3 className="size-5" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {overview?.workers.length ? (
+                  <ScrollArea className="h-80 pr-1">
+                    <div className="grid gap-3">
+                      {overview.workers.map((worker) => (
+                        <WorkerCard key={worker.workerId} worker={worker} />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-border bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
+                    No worker heartbeat detected yet. Start the worker service
+                    to populate this panel.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-12">
+          <Card className="border-border/60 bg-card/90 xl:col-span-7">
             <CardHeader className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <CardTitle className="text-2xl">Job details</CardTitle>
                   <CardDescription>
-                    Result content, metadata, serta retry dan cancel action
-                    untuk job terpilih.
+                    Payload, metadata, and recovery actions for the selected
+                    job.
                   </CardDescription>
                 </div>
                 {selectedJob ? (
@@ -794,7 +799,7 @@ export function DashboardClient({
             <CardContent className="space-y-5">
               {selectedJob ? (
                 <>
-                  <div className="grid gap-3 rounded-[1.5rem] bg-secondary/55 p-4 text-sm md:grid-cols-2">
+                  <div className="grid gap-3 rounded-2xl bg-muted p-4 text-sm md:grid-cols-2">
                     <div>
                       <p className="text-muted-foreground">Job ID</p>
                       <p className="mt-1 font-medium text-foreground">
@@ -843,13 +848,13 @@ export function DashboardClient({
                   </div>
 
                   {loadingResult ? (
-                    <div className="flex items-center gap-3 rounded-[1.5rem] border border-border bg-white/75 px-5 py-5 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-5 py-5 text-sm text-muted-foreground">
                       <LoaderCircle className="size-4 animate-spin" />
-                      Memuat result detail...
+                      Loading job result...
                     </div>
                   ) : selectedResult ? (
                     <div className="space-y-4">
-                      <div className="grid gap-3 rounded-[1.5rem] border border-border/70 bg-white/80 p-4 text-sm md:grid-cols-2">
+                      <div className="grid gap-3 rounded-2xl border border-border/70 bg-background/80 p-4 text-sm md:grid-cols-2">
                         <div>
                           <p className="text-muted-foreground">Completed</p>
                           <p className="mt-1 font-medium text-foreground">
@@ -863,13 +868,13 @@ export function DashboardClient({
                           </p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Content Type</p>
+                          <p className="text-muted-foreground">Content type</p>
                           <p className="mt-1 font-medium text-foreground">
                             {selectedResult.contentType ?? "-"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-muted-foreground">Response Time</p>
+                          <p className="text-muted-foreground">Response time</p>
                           <p className="mt-1 font-medium text-foreground">
                             {selectedResult.responseTimeMs
                               ? `${selectedResult.responseTimeMs} ms`
@@ -885,13 +890,13 @@ export function DashboardClient({
                         <div>
                           <p className="text-muted-foreground">Cached</p>
                           <p className="mt-1 font-medium text-foreground">
-                            {selectedResult.cached ? "yes" : "no"}
+                            {selectedResult.cached ? "Yes" : "No"}
                           </p>
                         </div>
                       </div>
 
                       {selectedResult.error ? (
-                        <div className="rounded-[1.5rem] border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-700">
+                        <div className="rounded-2xl border border-border bg-destructive/10 px-4 py-4 text-sm text-destructive">
                           {selectedResult.error}
                         </div>
                       ) : null}
@@ -900,10 +905,10 @@ export function DashboardClient({
                         <p className="text-sm font-medium text-foreground">
                           Preview
                         </p>
-                        <div className="rounded-[1.5rem] border border-border/70 bg-white/80 px-4 py-4 text-sm leading-7 text-muted-foreground">
+                        <div className="rounded-2xl border border-border/70 bg-background/80 px-4 py-4 text-sm leading-7 text-muted-foreground">
                           {selectedResult.preview ??
                             selectedResult.content?.slice(0, 500) ??
-                            "No preview"}
+                            "No preview available"}
                         </div>
                       </div>
 
@@ -911,8 +916,8 @@ export function DashboardClient({
                         <p className="text-sm font-medium text-foreground">
                           Raw content snippet
                         </p>
-                        <ScrollArea className="h-55 rounded-[1.5rem] border border-border/70 bg-zinc-950 px-4 py-4">
-                          <pre className="whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6 text-zinc-200">
+                        <ScrollArea className="h-56 rounded-2xl border border-border/70 bg-muted px-4 py-4">
+                          <pre className="whitespace-pre-wrap wrap-break-word font-mono text-xs leading-6 text-foreground/90">
                             {selectedResult.content?.slice(0, 4000) ??
                               "No content stored"}
                           </pre>
@@ -920,58 +925,57 @@ export function DashboardClient({
                       </div>
                     </div>
                   ) : (
-                    <div className="rounded-[1.5rem] border border-dashed border-border bg-secondary/40 px-6 py-8 text-center text-sm text-muted-foreground">
-                      Result untuk job ini belum tersedia. Jika status masih
-                      `queued` atau `processing`, tunggu refresh berikutnya.
+                    <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-6 py-8 text-center text-sm text-muted-foreground">
+                      Result data is not available yet. If the status is still
+                      queued or processing, wait for the next refresh.
                     </div>
                   )}
                 </>
               ) : (
-                <div className="rounded-[1.5rem] border border-dashed border-border bg-secondary/40 px-6 py-8 text-center text-sm text-muted-foreground">
-                  Pilih satu job dari tabel untuk melihat detailnya.
+                <div className="rounded-2xl border border-dashed border-border bg-muted/40 px-6 py-8 text-center text-sm text-muted-foreground">
+                  Select a job from the table to view details.
                 </div>
               )}
             </CardContent>
           </Card>
-        </section>
 
-        <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <ApiKeyPanel
-            apiKeys={apiKeys}
-            loadingApiKeys={loadingApiKeys}
-            creatingApiKey={creatingApiKey}
-            revokingKeyId={revokingKeyId}
-            newKeyLabel={newKeyLabel}
-            setNewKeyLabel={setNewKeyLabel}
-            newApiKeyValue={newApiKeyValue}
-            onCreate={handleCreateApiKey}
-            onRevoke={handleRevokeApiKey}
-          />
+          <div className="grid gap-6 xl:col-span-5">
+            <ApiKeyPanel
+              apiKeys={apiKeys}
+              loadingApiKeys={loadingApiKeys}
+              creatingApiKey={creatingApiKey}
+              revokingKeyId={revokingKeyId}
+              newKeyLabel={newKeyLabel}
+              setNewKeyLabel={setNewKeyLabel}
+              newApiKeyValue={newApiKeyValue}
+              onCreate={handleCreateApiKey}
+              onRevoke={handleRevokeApiKey}
+            />
 
-          <Card className="border-white/70 bg-white/88 shadow-[0_24px_90px_-50px_rgba(15,23,42,0.55)]">
-            <CardHeader>
-              <CardTitle className="text-2xl">Operational notes</CardTitle>
-              <CardDescription>
-                Ringkasan singkat untuk operator saat membaca kondisi cluster.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm text-muted-foreground">
-              <div className="rounded-[1.5rem] border border-border/70 bg-secondary/35 p-4">
-                Main queue menangani job baru. Retry queue menahan job
-                recoverable sebelum dikirim ulang ke worker. DLQ menampung job
-                yang sudah melebihi batas percobaan.
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-secondary/35 p-4">
-                Worker dari Docker dan VM bisa muncul bersamaan selama semuanya
-                terhubung ke RabbitMQ dan Redis yang sama.
-              </div>
-              <div className="rounded-[1.5rem] border border-border/70 bg-secondary/35 p-4">
-                Session dashboard hanya untuk admin manusia. API key sebaiknya
-                dibuat per client agar revoke tidak memutus semua integrasi
-                sekaligus.
-              </div>
-            </CardContent>
-          </Card>
+            <Card className="border-border/60 bg-card/90">
+              <CardHeader>
+                <CardTitle className="text-xl">Operational notes</CardTitle>
+                <CardDescription>
+                  Practical guidance for daily cluster operations.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-border/70 bg-muted/40 p-4">
+                  The main queue receives new workload. Retry queue keeps
+                  recoverable jobs before re-dispatch. Dead-letter queue stores
+                  jobs that exceeded retry thresholds.
+                </div>
+                <div className="rounded-xl border border-border/70 bg-muted/40 p-4">
+                  Docker and VM workers can run in parallel when connected to
+                  the same RabbitMQ and Redis infrastructure.
+                </div>
+                <div className="rounded-xl border border-border/70 bg-muted/40 p-4">
+                  Assign one API key per client integration to isolate
+                  revocations and reduce blast radius.
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </section>
       </div>
     </main>

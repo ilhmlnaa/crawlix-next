@@ -1,5 +1,5 @@
 import { getWebRuntimeConfig } from "@repo/config";
-import { DashboardClient } from "./dashboard-client";
+import { DashboardClient } from "@/components/page/dashboard/dashboard-client";
 
 export default async function Home() {
   const { apiBaseUrl } = getWebRuntimeConfig();
