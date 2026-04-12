@@ -26,4 +26,5 @@ USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
 	CMD ["node", "-e", "const p=process.env.DASHBOARD_PORT||'3000';fetch('http://localhost:'+p+'/').then((r)=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+
 CMD ["sh", "-c", "PORT=${DASHBOARD_PORT:-3000} node server.js"]
