@@ -18,7 +18,7 @@ RUN pnpm install --frozen-lockfile --prod --filter=@repo/api...
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# ENV PORT=3001
+ENV API_PORT=3001
 
 RUN addgroup -S nodejs && adduser -S nestjs -G nodejs
 
@@ -31,7 +31,7 @@ RUN chown -R nestjs:nodejs /app
 
 WORKDIR /app/apps/api
 USER nestjs
-# EXPOSE 3001
+EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-	CMD ["node", "-e", "fetch('http://localhost:'+process.env.PORT+'/api/health/live').then((r)=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+	CMD ["node", "-e", "const p=process.env.API_PORT||'3001';fetch('http://localhost:'+p+'/api/health/live').then((r)=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
 CMD ["node", "dist/main"]

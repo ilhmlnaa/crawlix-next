@@ -10,12 +10,12 @@ RUN pnpm turbo run build --filter=@repo/web...
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV DASHBOARD_PORT=3000
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 
-COPY --from=builder /app/apps/web/.next/standalone/apps/web ./
+COPY --from=builder /app/apps/web/.next/standalone ./
 COPY --from=builder /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=builder /app/apps/web/public ./apps/web/public
 
@@ -25,5 +25,5 @@ WORKDIR /app/apps/web
 USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-	CMD ["node", "-e", "fetch('http://localhost:'+process.env.PORT+'/').then((r)=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
-CMD ["node", "server.js"]
+	CMD ["node", "-e", "const p=process.env.DASHBOARD_PORT||'3000';fetch('http://localhost:'+p+'/').then((r)=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+CMD ["sh", "-c", "PORT=${DASHBOARD_PORT:-3000} node server.js"]
