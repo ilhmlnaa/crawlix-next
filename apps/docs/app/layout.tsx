@@ -11,6 +11,9 @@ export const metadata: Metadata = {
   title: 'Crawlix Next Docs',
   description: 'Operational and integration documentation for Crawlix Next.',
   metadataBase: new URL('http://localhost:3005'),
+  icons: {
+    icon: '/logo.png',
+  },
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {

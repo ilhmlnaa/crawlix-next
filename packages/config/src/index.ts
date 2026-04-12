@@ -305,7 +305,7 @@ export function getApiRuntimeConfig(
 ): ApiRuntimeConfig {
   return {
     serviceName: env.API_SERVICE_NAME ?? "crawlix-api",
-    port: readPort(env, "API_PORT", 3001),
+    port: Number(env.PORT ?? readPort(env, "API_PORT", 3001)),    
     corsOrigin: env.CORS_ORIGIN ?? "*",
     publicApiRateLimitPerMinute: readNumber(
       env.PUBLIC_API_RATE_LIMIT_PER_MINUTE,
