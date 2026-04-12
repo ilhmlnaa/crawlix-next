@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://storage.hamdiv.me/project/crawlix/crawlix.png" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
+<img src="https://storage.hamdiv.me/project/crawlix/crawlix-next.png" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
 
 <!-- https://media1.tenor.com/m/gWFk3_M14rkAAAAd/craft-anime.gif -->
 
