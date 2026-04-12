@@ -68,6 +68,14 @@ function readNumber(value: string | undefined, fallback: number): number {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
+function readPort(
+  env: NodeJS.ProcessEnv,
+  specificKey: string,
+  fallback: number,
+): number {
+  return readNumber(env[specificKey] ?? env.PORT, fallback);
+}
+
 function readQueueConfig(env: NodeJS.ProcessEnv): QueueConfig {
   return {
     url: env.RABBITMQ_URL ?? 'amqp://localhost:5672',
@@ -207,7 +215,7 @@ export function validateApiRuntimeConfig(
   return {
     ...config,
     serviceName: assertNonEmpty(config.serviceName, 'API_SERVICE_NAME'),
-    port: assertPositiveInteger(config.port, 'PORT'),
+    port: assertPositiveInteger(config.port, 'API_PORT'),
     corsOrigin: assertNonEmpty(config.corsOrigin, 'CORS_ORIGIN'),
     publicApiRateLimitPerMinute: assertPositiveInteger(
       config.publicApiRateLimitPerMinute,
@@ -226,7 +234,7 @@ export function validateWorkerRuntimeConfig(
   return {
     ...config,
     serviceName: assertNonEmpty(config.serviceName, 'WORKER_SERVICE_NAME'),
-    port: assertPositiveInteger(config.port, 'PORT'),
+    port: assertPositiveInteger(config.port, 'WORKER_PORT'),
     queue: validateQueueConfig(config.queue),
     redis: validateRedisConfig(config.redis),
     scraper: validateScraperConfig(config.scraper),
@@ -296,7 +304,7 @@ export function getApiRuntimeConfig(
 ): ApiRuntimeConfig {
   return {
     serviceName: env.API_SERVICE_NAME ?? 'crawlix-api',
-    port: readNumber(env.PORT, 3001),
+    port: readPort(env, 'API_PORT', 3001),
     corsOrigin: env.CORS_ORIGIN ?? '*',
     publicApiRateLimitPerMinute: readNumber(
       env.PUBLIC_API_RATE_LIMIT_PER_MINUTE,
@@ -314,7 +322,7 @@ export function getWorkerRuntimeConfig(
 ): WorkerRuntimeConfig {
   return {
     serviceName: env.WORKER_SERVICE_NAME ?? 'crawlix-worker',
-    port: readNumber(env.PORT, 3002),
+    port: readPort(env, 'WORKER_PORT', 3002),
     queue: readQueueConfig(env),
     redis: readRedisConfig(env),
     scraper: readScraperConfig(env),

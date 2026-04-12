@@ -148,7 +148,9 @@ export function DispatcherPage() {
                   </label>
                   <Select
                     value={workerId || "auto"}
-                    onValueChange={(v) => setWorkerId(v === "auto" ? "" : v)}
+                    onValueChange={(v) =>
+                      setWorkerId(v && v !== "auto" ? v : "")
+                    }
                   >
                     <SelectTrigger className="bg-[#121828] border-[#1a2235] text-slate-200 h-12 rounded-xl focus:ring-indigo-500">
                       <SelectValue />
@@ -179,7 +181,10 @@ export function DispatcherPage() {
                 <div className="px-4 pb-4 pt-1 space-y-4 border-t border-[#1a2235]">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FieldLabel label="Method">
-                      <Select value={method} onValueChange={setMethod}>
+                      <Select
+                        value={method}
+                        onValueChange={(value) => setMethod(value ?? "GET")}
+                      >
                         <SelectTrigger className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl">
                           <SelectValue />
                         </SelectTrigger>

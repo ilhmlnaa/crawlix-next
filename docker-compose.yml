@@ -43,7 +43,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      PORT: 3001
+      API_PORT: 3001
       CORS_ORIGIN: http://localhost:3000
       API_SERVICE_NAME: crawlix-api
       DASHBOARD_ORIGIN: http://localhost:3000
@@ -74,7 +74,7 @@ services:
     ports:
       - '3001:3001'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:' + (process.env.API_PORT || '3001') + '/api/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -91,7 +91,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      PORT: 3002
+      WORKER_PORT: 3002
       WORKER_SERVICE_NAME: crawlix-worker
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
       RABBITMQ_QUEUE_NAME: crawlix.scrape.jobs
@@ -111,7 +111,7 @@ services:
       PLAYWRIGHT_HEADLESS: true
       PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS: 120000
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3002/worker/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:' + (process.env.WORKER_PORT || '3002') + '/worker/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -126,11 +126,12 @@ services:
       api:
         condition: service_healthy
     environment:
+      DASHBOARD_PORT: 3000
       NEXT_PUBLIC_API_BASE_URL: http://api:3001/api
     ports:
       - '3000:3000'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:' + (process.env.DASHBOARD_PORT || '3000')).then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
       interval: 20s
       timeout: 10s
       retries: 5

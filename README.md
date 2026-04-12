@@ -260,6 +260,9 @@ For standard local development, use the root `.env` file. The repository already
 
 | Variable                           | Purpose                                            |
 | ---------------------------------- | -------------------------------------------------- |
+| `API_PORT`                         | Dedicated port for the NestJS API                  |
+| `WORKER_PORT`                      | Dedicated port for the NestJS worker               |
+| `DASHBOARD_PORT`                   | Dedicated port for the Next.js dashboard runtime   |
 | `RABBITMQ_URL`                     | RabbitMQ connection string                         |
 | `REDIS_URL`                        | Redis connection string                            |
 | `RABBITMQ_QUEUE_NAME`              | Shared main queue name                             |
@@ -292,6 +295,20 @@ Use the following model when deciding where environment variables should live:
   Use these when deploying `api`, `worker`, and `web` as separate services or when running them independently in different environments.
 - `apps/web`
   Pay extra attention to `NEXT_PUBLIC_*` variables. These are injected at build time and must be set before building the Next.js dashboard.
+
+### Port variables
+
+The root environment file now supports service-specific ports:
+
+- `API_PORT`
+- `WORKER_PORT`
+- `DASHBOARD_PORT`
+
+For backward compatibility, `PORT` is still accepted as a fallback. The lookup priority is:
+
+- API: `API_PORT` -> `PORT` -> `3001`
+- Worker: `WORKER_PORT` -> `PORT` -> `3002`
+- Dashboard: `DASHBOARD_PORT` -> `PORT` -> `3000`
 
 This matters especially for Docker deployment:
 
