@@ -26,6 +26,7 @@ import {
   Globe,
   Database,
   Terminal,
+  type LucideIcon,
 } from "lucide-react";
 import { useDashboardSession } from "@/components/page/dashboard/session-provider";
 import { cn } from "@/lib/utils";
@@ -72,13 +73,13 @@ export function OverviewPage() {
   const { overview, refreshing, handleRefresh } = useDashboardSession();
 
   const totalJobs = overview?.total ?? 0;
-  const completed = overview?.statusCounts.completed ?? 0;
-  const failed = overview?.statusCounts.failed ?? 0;
+  const completed = overview?.statusCounts?.completed ?? 0;
+  const failed = overview?.statusCounts?.failed ?? 0;
   const queueDepth = overview?.queueDepth ?? 0;
   const consumerCount = overview?.consumerCount ?? 0;
   const activeWorkers =
-    overview?.workers.filter((w) => w.status === "processing").length ?? 0;
-  const totalWorkers = overview?.workers.length ?? 0;
+    (overview?.workers ?? []).filter((w) => w.status === "processing").length;
+  const totalWorkers = overview?.workers?.length ?? 0;
 
   const systemLoad = useMemo(() => {
     if (!overview) return "—";
@@ -105,19 +106,20 @@ export function OverviewPage() {
       grouped[name] = { name, dispatched: 0, completed: 0 };
     }
 
-    overview?.recentJobs.forEach((job) => {
+    overview?.recentJobs?.forEach((job) => {
       const d = new Date(job.updatedAt || job.requestedAt);
       const name = `${d.toLocaleString("default", { month: "short" })} ${d.getDate()}`;
-      if (grouped[name]) {
-        grouped[name].dispatched += 1;
-        if (job.status === "completed") grouped[name].completed += 1;
+      const entry = grouped[name];
+      if (entry) {
+        entry.dispatched += 1;
+        if (job.status === "completed") entry.completed += 1;
       }
     });
 
     return Object.values(grouped);
   }, [overview?.recentJobs]);
 
-  const recentActivity = overview?.recentJobs.slice(0, 5) ?? [];
+  const recentActivity = overview?.recentJobs?.slice(0, 5) ?? [];
 
   return (
     <div className="space-y-8 pb-10">
@@ -174,7 +176,7 @@ export function OverviewPage() {
               <QuickStat icon={Cpu} label="System Load" value={systemLoad} />
               <QuickStat
                 icon={Globe}
-                label="API Nodes"
+                label="Worker Nodes"
                 value={`${consumerCount} Active`}
               />
               <QuickStat
@@ -481,7 +483,7 @@ function QuickStat({
   label,
   value,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   label: string;
   value: string;
 }) {

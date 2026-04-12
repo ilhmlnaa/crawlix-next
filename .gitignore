@@ -49,3 +49,4 @@ yarn-error.log*
 *.pem
 
 dev
+.env.production

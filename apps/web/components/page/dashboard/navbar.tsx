@@ -2,13 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import {
-  LogOut,
-  RefreshCw,
-  Settings,
-  Bell,
-  ShieldCheck,
-} from "lucide-react";
+import { LogOut, RefreshCw, Settings, Bell, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useDashboardSession } from "./session-provider";
@@ -63,7 +57,7 @@ export function DashboardNavbar() {
         <div className="hidden md:flex items-center gap-4 bg-[#0c1220] border border-[#1a2235] px-4 py-1.5 rounded-xl shadow-inner">
           <div className="flex flex-col items-start leading-none">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
-              Active Fleet
+              Active Workers
             </span>
             <span className="text-xs font-bold text-indigo-400">
               {overview?.workers.length || 0} Nodes
