@@ -1,31 +1,30 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
-RUN apk add --no-cache libc6-compat
-RUN corepack enable && corepack prepare pnpm@latest --activate
-COPY . .
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps ./apps
+COPY packages ./packages
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@repo/api...
-
-FROM node:22-alpine AS deps
-WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@latest --activate
-COPY . .
-COPY --from=builder /app/apps/api/dist ./apps/api/dist
-COPY --from=builder /app/packages ./packages
-RUN pnpm --filter=@repo/api --prod deploy /app/pruned
+RUN pnpm deploy --filter=@repo/api --prod /prod/api
 
 FROM node:22-alpine AS runner
 WORKDIR /app
+COPY --from=builder /prod/api/node_modules ./apps/api/node_modules
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
+COPY --from=builder /app/packages/config/dist ./packages/config/dist
+COPY --from=builder /app/packages/config/package.json ./packages/config/package.json
+COPY --from=builder /app/packages/observability/dist ./packages/observability/dist
+COPY --from=builder /app/packages/observability/package.json ./packages/observability/package.json
+COPY --from=builder /app/packages/queue-contracts/dist ./packages/queue-contracts/dist
+COPY --from=builder /app/packages/queue-contracts/package.json ./packages/queue-contracts/package.json
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/package.json
+
 ENV NODE_ENV=production
-ENV API_PORT=3001
-RUN addgroup -S nodejs && adduser -S nestjs -G nodejs
-COPY --from=deps /app/pruned /app/apps/api
-RUN chown -R nestjs:nodejs /app
-WORKDIR /app/apps/api
-USER nestjs
+ENV PORT=3001
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-	CMD ["node", "-e", "const p=process.env.API_PORT||'3001';fetch('http://localhost:'+p+'/api/health/live').then((r)=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
-
+WORKDIR /app/apps/api
 CMD ["node", "dist/main.js"]
