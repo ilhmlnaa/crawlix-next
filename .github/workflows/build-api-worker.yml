@@ -4,19 +4,109 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*.*.*"
+    paths:
+      - apps/api/**
+      - apps/worker/**
+      - packages/**
+      - docker/api.Dockerfile
+      - docker/worker.Dockerfile
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - turbo.json
+      - .github/workflows/build-api-worker.yml
   pull_request:
     branches:
       - main
+    paths:
+      - apps/api/**
+      - apps/worker/**
+      - packages/**
+      - docker/api.Dockerfile
+      - docker/worker.Dockerfile
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - turbo.json
+      - .github/workflows/build-api-worker.yml
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/crawlix-next
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set-matrix.outputs.services }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Detect changed paths
+        id: changes
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            api:
+              - 'apps/api/**'
+              - 'docker/api.Dockerfile'
+            worker:
+              - 'apps/worker/**'
+              - 'docker/worker.Dockerfile'
+            shared:
+              - 'packages/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - '.github/workflows/build-api-worker.yml'
+
+      - name: Build service matrix
+        id: set-matrix
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'services=["api","worker"]' >> "$GITHUB_OUTPUT"
+            echo 'has_changes=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          api_changed='${{ steps.changes.outputs.api }}'
+          worker_changed='${{ steps.changes.outputs.worker }}'
+          shared_changed='${{ steps.changes.outputs.shared }}'
+
+          services=()
+          if [ "$shared_changed" = "true" ] || [ "$api_changed" = "true" ]; then
+            services+=("api")
+          fi
+          if [ "$shared_changed" = "true" ] || [ "$worker_changed" = "true" ]; then
+            services+=("worker")
+          fi
+
+          if [ ${#services[@]} -eq 0 ]; then
+            echo 'services=[]' >> "$GITHUB_OUTPUT"
+            echo 'has_changes=false' >> "$GITHUB_OUTPUT"
+          else
+            json="[\"${services[0]}\""
+            for service in "${services[@]:1}"; do
+              json+=",\"$service\""
+            done
+            json+="]"
+            echo "services=$json" >> "$GITHUB_OUTPUT"
+            echo 'has_changes=true' >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-push:
+    needs: detect-changes
+    if: github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,9 +114,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - api
-          - worker
+        service: ${{ fromJSON(needs.detect-changes.outputs.services) }}
 
     steps:
       - name: Check out repository
