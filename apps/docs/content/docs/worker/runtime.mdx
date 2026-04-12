@@ -56,3 +56,8 @@ Example response:
 - Each worker also exposes a stable `workerId` for the current runtime and consumes a dedicated queue shaped like `crawlix.scrape.jobs.worker.<workerId>`.
 - Jobs created with `targetWorkerId` are published only to that worker-specific queue. They do not fall back to the shared queue automatically.
 - The admin dashboard can list active workers and use their `workerId` for targeted dispatch decisions.
+- Proxy is resolved in worker runtime from each job options with this precedence:
+  - if `useProxy` is `false`, no proxy is used.
+  - if `useProxy` is `true` and `proxyUrl` is provided, worker uses that URL.
+  - if `useProxy` is `true` and `proxyUrl` is empty, worker falls back to `SCRAPER_PROXY_URL`.
+  - if both proxy values are empty, request runs direct.

@@ -25,10 +25,13 @@ RABBITMQ_QUEUE_NAME=crawlix.scrape.jobs
 RABBITMQ_RETRY_QUEUE_NAME=crawlix.scrape.jobs.retry
 RABBITMQ_DLQ_QUEUE_NAME=crawlix.scrape.jobs.dlq
 REDIS_URL=redis://redis:6379
+SCRAPER_PROXY_URL=http://206.189.154.204:8888
 SESSION_SECRET=replace-with-strong-session-secret
 DASHBOARD_ADMIN_EMAIL=admin@crawlix.local
 DASHBOARD_ADMIN_PASSWORD=replace-with-strong-admin-password
 ```
+
+`SCRAPER_PROXY_URL` is a worker-side fallback proxy. It is used only when a job enables `useProxy=true` but does not provide `proxyUrl` in the request body.
 
 ## Env File Strategy
 

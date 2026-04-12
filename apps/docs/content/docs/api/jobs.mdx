@@ -148,7 +148,23 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
     "waitForSelector": "#app",
     "waitForFunction": "window.__READY__ === true",
     "additionalDelayMs": 500,
-    "useProxy": false
+    "useProxy": false,
+    "proxyUrl": "http://206.189.154.204:8888"
+  }
+}
+```
+
+## Proxy Options
+
+If you want proxy routing per job, use `options.useProxy` and optionally `options.proxyUrl`.
+
+```json
+{
+  "url": "https://example.com/protected",
+  "strategy": "playwright",
+  "options": {
+    "useProxy": true,
+    "proxyUrl": "http://206.189.154.204:8888"
   }
 }
 ```
@@ -162,3 +178,8 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
 - Targeted jobs keep their worker affinity during retry and are dispatched to the selected worker queue, not the shared queue.
 - Status polling is the default client pattern in v1.
 - Admin-only endpoints like retry and cancel are intentionally omitted from request examples in this docs section.
+- Proxy decision order:
+  1. if `options.useProxy` is `false`, Crawlix does not use a proxy.
+  2. if `options.useProxy` is `true` and `options.proxyUrl` is present, worker uses `options.proxyUrl`.
+  3. if `options.useProxy` is `true` and `options.proxyUrl` is empty, worker falls back to `SCRAPER_PROXY_URL` from worker env.
+  4. if `options.useProxy` is `true` and both values are empty, request runs without proxy.
