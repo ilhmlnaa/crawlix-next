@@ -1,12 +1,15 @@
-import { getWorkerRuntimeConfig, type ScraperRuntimeConfig } from '@repo/config';
+import {
+  getWorkerRuntimeConfig,
+  type ScraperRuntimeConfig,
+} from "@repo/config";
 import type {
   ScrapeJobMessage,
   ScrapeJobOptions,
   ScrapeJobResult,
   ScrapeStrategy,
   ScrapeWaitUntil,
-} from '@repo/queue-contracts';
-import { summarizeContent } from '@repo/shared';
+} from "@repo/queue-contracts";
+import { summarizeContent } from "@repo/shared";
 
 export interface ScrapeExecutionContext {
   config?: ScraperRuntimeConfig;
@@ -41,14 +44,17 @@ export interface BrowserRuntimeStats {
 }
 
 const DEFAULT_HEADERS = {
-  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-  'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-  'Accept-Encoding': 'gzip, deflate, br',
-  Connection: 'keep-alive',
-  'Upgrade-Insecure-Requests': '1',
+  Accept:
+    "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+  "Accept-Language": "id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Accept-Encoding": "gzip, deflate, br",
+  Connection: "keep-alive",
+  "Upgrade-Insecure-Requests": "1",
 };
 
-function readConfig(context?: ScrapeExecutionContext): Required<ScrapeExecutionContext> {
+function readConfig(
+  context?: ScrapeExecutionContext,
+): Required<ScrapeExecutionContext> {
   return {
     config: context?.config ?? getWorkerRuntimeConfig().scraper,
   };
@@ -60,7 +66,7 @@ function buildHeaders(
 ): HeadersInit {
   return {
     ...DEFAULT_HEADERS,
-    'User-Agent': config.userAgent,
+    "User-Agent": config.userAgent,
     ...(options.headers ?? {}),
   };
 }
@@ -73,15 +79,36 @@ function buildBody(options: ScrapeJobOptions): BodyInit | undefined {
   return options.body;
 }
 
-function readTimeout(options: ScrapeJobOptions, config: ScraperRuntimeConfig): number {
+function readTimeout(
+  options: ScrapeJobOptions,
+  config: ScraperRuntimeConfig,
+): number {
   return options.timeoutMs ?? config.defaultTimeoutMs;
+}
+
+function resolveProxyUrl(
+  options: ScrapeJobOptions,
+  config: ScraperRuntimeConfig,
+): string | undefined {
+  if (options.useProxy !== true) {
+    return undefined;
+  }
+
+  const requestProxyUrl = options.proxyUrl?.trim();
+  if (requestProxyUrl) {
+    return requestProxyUrl;
+  }
+
+  const fallbackProxyUrl = config.proxyUrl?.trim();
+  return fallbackProxyUrl ? fallbackProxyUrl : undefined;
 }
 
 class BrowserPoolManager {
   private static instance: BrowserPoolManager | null = null;
   private directBrowser: any | null = null;
   private proxyBrowser: any | null = null;
-  private idleTimers = new Map<'direct' | 'proxy', NodeJS.Timeout>();
+  private proxyBrowserUrl: string | null = null;
+  private idleTimers = new Map<"direct" | "proxy", NodeJS.Timeout>();
   private playwrightAvailable = true;
 
   static getInstance() {
@@ -93,12 +120,20 @@ class BrowserPoolManager {
   }
 
   async getBrowser(
-    useProxy: boolean,
+    proxyUrl: string | undefined,
     config: ScraperRuntimeConfig,
   ): Promise<any> {
-    const key: 'direct' | 'proxy' =
-      useProxy && config.proxyUrl ? 'proxy' : 'direct';
-    const existing = key === 'proxy' ? this.proxyBrowser : this.directBrowser;
+    const key: "direct" | "proxy" = proxyUrl ? "proxy" : "direct";
+
+    if (
+      key === "proxy" &&
+      this.proxyBrowser &&
+      this.proxyBrowserUrl !== proxyUrl
+    ) {
+      await this.closeBrowser("proxy");
+    }
+
+    const existing = key === "proxy" ? this.proxyBrowser : this.directBrowser;
 
     if (existing) {
       this.resetIdleTimer(key, config);
@@ -106,32 +141,28 @@ class BrowserPoolManager {
     }
 
     const dynamicImport = new Function(
-      'specifier',
-      'return import(specifier)',
+      "specifier",
+      "return import(specifier)",
     ) as (specifier: string) => Promise<any>;
 
     try {
-      const playwright = await dynamicImport('playwright');
+      const playwright = await dynamicImport("playwright");
       const chromium = playwright.chromium;
       const browser = await chromium.launch({
         headless: config.playwrightHeadless,
         executablePath: config.playwrightExecutablePath,
-        proxy:
-          key === 'proxy' && config.proxyUrl
-            ? {
-                server: config.proxyUrl,
-              }
-            : undefined,
+        proxy: key === "proxy" && proxyUrl ? { server: proxyUrl } : undefined,
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
         ],
       });
 
-      if (key === 'proxy') {
+      if (key === "proxy") {
         this.proxyBrowser = browser;
+        this.proxyBrowserUrl = proxyUrl ?? null;
       } else {
         this.directBrowser = browser;
       }
@@ -146,7 +177,7 @@ class BrowserPoolManager {
   }
 
   private resetIdleTimer(
-    key: 'direct' | 'proxy',
+    key: "direct" | "proxy",
     config: ScraperRuntimeConfig,
   ) {
     const current = this.idleTimers.get(key);
@@ -160,16 +191,17 @@ class BrowserPoolManager {
     this.idleTimers.set(key, timer);
   }
 
-  async closeBrowser(key: 'direct' | 'proxy') {
-    const browser = key === 'proxy' ? this.proxyBrowser : this.directBrowser;
+  async closeBrowser(key: "direct" | "proxy") {
+    const browser = key === "proxy" ? this.proxyBrowser : this.directBrowser;
 
     if (!browser) {
       return;
     }
 
     await browser.close().catch(() => undefined);
-    if (key === 'proxy') {
+    if (key === "proxy") {
       this.proxyBrowser = null;
+      this.proxyBrowserUrl = null;
     } else {
       this.directBrowser = null;
     }
@@ -181,7 +213,10 @@ class BrowserPoolManager {
   }
 
   async destroy() {
-    await Promise.all([this.closeBrowser('direct'), this.closeBrowser('proxy')]);
+    await Promise.all([
+      this.closeBrowser("direct"),
+      this.closeBrowser("proxy"),
+    ]);
   }
 
   getStats(): BrowserRuntimeStats {
@@ -212,7 +247,7 @@ async function executeHttpFetch(
 
   try {
     const response = await fetch(job.url, {
-      method: options.method ?? 'GET',
+      method: options.method ?? "GET",
       headers: buildHeaders(options, context.config),
       body: buildBody(options),
       signal: controller.signal,
@@ -224,7 +259,7 @@ async function executeHttpFetch(
       return {
         success: false,
         content,
-        contentType: response.headers.get('content-type') ?? 'text/plain',
+        contentType: response.headers.get("content-type") ?? "text/plain",
         method: methodLabel,
         responseTimeMs: Date.now() - startedAt,
         error: `Upstream request failed with status ${response.status}`,
@@ -234,17 +269,18 @@ async function executeHttpFetch(
     return {
       success: true,
       content,
-      contentType: response.headers.get('content-type') ?? 'text/plain',
+      contentType: response.headers.get("content-type") ?? "text/plain",
       method: methodLabel,
       responseTimeMs: Date.now() - startedAt,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown fetch error';
+    const message =
+      error instanceof Error ? error.message : "Unknown fetch error";
 
     return {
       success: false,
-      content: '',
-      contentType: 'text/plain',
+      content: "",
+      contentType: "text/plain",
       method: methodLabel,
       responseTimeMs: Date.now() - startedAt,
       error: message,
@@ -260,54 +296,60 @@ class CloudscraperStrategy implements ScraperStrategy {
     context: Required<ScrapeExecutionContext>,
   ): Promise<ScraperStrategyResult> {
     const dynamicImport = new Function(
-      'specifier',
-      'return import(specifier)',
+      "specifier",
+      "return import(specifier)",
     ) as (specifier: string) => Promise<any>;
 
     try {
-      const cloudscraperModule = await dynamicImport('cloudscraper');
+      const cloudscraperModule = await dynamicImport("cloudscraper");
       const cloudscraper = cloudscraperModule.default ?? cloudscraperModule;
       const startedAt = Date.now();
+      const proxyUrl = resolveProxyUrl(job.options, context.config);
       const response = await cloudscraper({
         uri: new URL(job.url).href,
-        method: job.options.method ?? 'GET',
+        method: job.options.method ?? "GET",
         body: job.options.body,
         form: job.options.formData,
         headers: buildHeaders(job.options, context.config),
         timeout: readTimeout(job.options, context.config),
-        proxy:
-          job.options.useProxy && context.config.proxyUrl
-            ? context.config.proxyUrl
-            : undefined,
+        proxy: proxyUrl,
         gzip: true,
         resolveWithFullResponse: true,
       });
 
       const content =
-        typeof response.body === 'string'
+        typeof response.body === "string"
           ? response.body
           : JSON.stringify(response.body);
 
       return {
         success: true,
         content,
-        contentType: response.headers['content-type'] ?? 'text/html',
-        method: 'cloudscraper-direct',
+        contentType: response.headers["content-type"] ?? "text/html",
+        method: proxyUrl ? "cloudscraper-proxy" : "cloudscraper-direct",
         responseTimeMs: Date.now() - startedAt,
       };
     } catch {
-      return executeHttpFetch(job, context, 'cloudscraper-http-fallback');
+      return executeHttpFetch(job, context, "cloudscraper-http-fallback");
     }
   }
 }
 
-async function maybeWaitForSelector(page: any, selector?: string, timeoutMs?: number) {
+async function maybeWaitForSelector(
+  page: any,
+  selector?: string,
+  timeoutMs?: number,
+) {
   if (selector) {
     await page.waitForSelector(selector, { timeout: timeoutMs });
   }
 }
 
-async function maybeWaitForFunction(page: any, fn?: string, timeoutMs?: number) {
+async function maybeWaitForFunction(
+  page: any,
+  fn?: string,
+  timeoutMs?: number,
+) {
   if (fn) {
     await page.waitForFunction(fn, { timeout: timeoutMs });
   }
@@ -327,16 +369,17 @@ class PlaywrightStrategy implements ScraperStrategy {
     context: Required<ScrapeExecutionContext>,
   ): Promise<ScraperStrategyResult> {
     const dynamicImport = new Function(
-      'specifier',
-      'return import(specifier)',
+      "specifier",
+      "return import(specifier)",
     ) as (specifier: string) => Promise<any>;
 
     try {
-      const playwright = await dynamicImport('playwright');
+      const playwright = await dynamicImport("playwright");
       const startedAt = Date.now();
       const timeoutMs = readTimeout(job.options, context.config);
+      const proxyUrl = resolveProxyUrl(job.options, context.config);
       const browser = await this.browserPool.getBrowser(
-        job.options.useProxy === true,
+        proxyUrl,
         context.config,
       );
       const page = await browser.newPage({
@@ -344,38 +387,50 @@ class PlaywrightStrategy implements ScraperStrategy {
       });
 
       try {
-        const waitUntil = (job.options.waitUntil ?? 'domcontentloaded') as ScrapeWaitUntil;
+        const waitUntil = (job.options.waitUntil ??
+          "domcontentloaded") as ScrapeWaitUntil;
         const response = await page.goto(job.url, {
           timeout: timeoutMs,
           waitUntil,
         });
 
-        await maybeWaitForSelector(page, job.options.waitForSelector, timeoutMs);
-        await maybeWaitForFunction(page, job.options.waitForFunction, timeoutMs);
+        await maybeWaitForSelector(
+          page,
+          job.options.waitForSelector,
+          timeoutMs,
+        );
+        await maybeWaitForFunction(
+          page,
+          job.options.waitForFunction,
+          timeoutMs,
+        );
         await maybeWaitAdditionalDelay(page, job.options.additionalDelayMs);
 
-        const contentType = response?.headers()['content-type'] ?? 'text/html';
-        const content = contentType.includes('text/html')
+        const contentType = response?.headers()["content-type"] ?? "text/html";
+        const content = contentType.includes("text/html")
           ? await page.content()
-          : ((await response?.text()) ?? '');
+          : ((await response?.text()) ?? "");
 
         return {
           success: true,
           content,
           contentType,
-          method: 'playwright-direct',
+          method: proxyUrl ? "playwright-proxy" : "playwright-direct",
           responseTimeMs: Date.now() - startedAt,
         };
       } finally {
         await page.close().catch(() => undefined);
       }
     } catch {
-      return executeHttpFetch(job, context, 'playwright-http-fallback');
+      return executeHttpFetch(job, context, "playwright-http-fallback");
     }
   }
 }
 
-function createStrategies(): Record<Exclude<ScrapeStrategy, 'auto'>, ScraperStrategy> {
+function createStrategies(): Record<
+  Exclude<ScrapeStrategy, "auto">,
+  ScraperStrategy
+> {
   return {
     cloudscraper: new CloudscraperStrategy(),
     playwright: new PlaywrightStrategy(),
@@ -389,7 +444,7 @@ function createFailureResult(
 ): ScrapeJobResult {
   return {
     jobId: job.jobId,
-    status: 'failed',
+    status: "failed",
     url: job.url,
     strategy: job.strategy,
     requestedAt: job.requestedAt,
@@ -407,7 +462,7 @@ function createSuccessResult(
 ): ScrapeJobResult {
   return {
     jobId: job.jobId,
-    status: 'completed',
+    status: "completed",
     url: job.url,
     strategy: job.strategy,
     requestedAt: job.requestedAt,
@@ -432,16 +487,16 @@ export class ScraperService {
   ): Promise<ScrapeJobResult> {
     const resolvedContext = readConfig(context);
     const strategy =
-      job.strategy === 'auto'
+      job.strategy === "auto"
         ? resolvedContext.config.defaultStrategy
         : job.strategy;
-    const maxRetries = job.options.maxRetries ?? resolvedContext.config.maxRetries;
+    const maxRetries =
+      job.options.maxRetries ?? resolvedContext.config.maxRetries;
     const retryDelayMs =
       job.options.retryDelayMs ?? resolvedContext.config.retryDelayMs;
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-      const currentStrategy =
-        strategy === 'auto' ? 'cloudscraper' : strategy;
+      const currentStrategy = strategy === "auto" ? "cloudscraper" : strategy;
       const primary = this.strategies[currentStrategy];
       const execution = await primary.execute(job, resolvedContext);
 
@@ -449,7 +504,7 @@ export class ScraperService {
         return createSuccessResult(job, execution, attempt);
       }
 
-      if (job.strategy === 'auto' && currentStrategy === 'cloudscraper') {
+      if (job.strategy === "auto" && currentStrategy === "cloudscraper") {
         const fallbackExecution = await this.strategies.playwright.execute(
           job,
           resolvedContext,
@@ -463,7 +518,7 @@ export class ScraperService {
       if (attempt === maxRetries) {
         return createFailureResult(
           job,
-          execution.error ?? 'Scraping failed',
+          execution.error ?? "Scraping failed",
           attempt,
         );
       }
@@ -473,7 +528,7 @@ export class ScraperService {
       );
     }
 
-    return createFailureResult(job, 'Max retries exceeded', maxRetries);
+    return createFailureResult(job, "Max retries exceeded", maxRetries);
   }
 
   async dispose(): Promise<void> {

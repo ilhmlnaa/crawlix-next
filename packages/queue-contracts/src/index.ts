@@ -1,19 +1,19 @@
-export const DEFAULT_JOB_STATUS = 'queued';
+export const DEFAULT_JOB_STATUS = "queued";
 
 export type ScrapeJobStatus =
-  | 'queued'
-  | 'processing'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  | "queued"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
-export type ScrapeStrategy = 'cloudscraper' | 'playwright' | 'auto';
+export type ScrapeStrategy = "cloudscraper" | "playwright" | "auto";
 
 export type ScrapeWaitUntil =
-  | 'load'
-  | 'domcontentloaded'
-  | 'networkidle'
-  | 'commit';
+  | "load"
+  | "domcontentloaded"
+  | "networkidle"
+  | "commit";
 
 export interface ScrapeJobOptions {
   timeoutMs?: number;
@@ -30,6 +30,7 @@ export interface ScrapeJobOptions {
   waitForFunction?: string;
   additionalDelayMs?: number;
   useProxy?: boolean;
+  proxyUrl?: string;
 }
 
 export interface CreateScrapeJobInput {
@@ -108,7 +109,7 @@ export interface WorkerHeartbeat {
   deadLetterQueueName: string;
   hostname: string;
   pid: number;
-  status: 'idle' | 'processing';
+  status: "idle" | "processing";
   startedAt: string;
   lastSeenAt: string;
   currentJobId?: string;
@@ -143,7 +144,7 @@ export interface ApiKeyRecord {
   keyId: string;
   label: string;
   keyPreview: string;
-  status: 'active' | 'revoked';
+  status: "active" | "revoked";
   createdAt: string;
   revokedAt?: string;
   lastUsedAt?: string;

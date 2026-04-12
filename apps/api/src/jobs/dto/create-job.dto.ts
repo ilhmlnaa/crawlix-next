@@ -77,6 +77,10 @@ class CreateJobOptionsDto implements ScrapeJobOptions {
   @IsOptional()
   @IsBoolean()
   useProxy?: boolean;
+
+  @IsOptional()
+  @IsUrl()
+  proxyUrl?: string;
 }
 
 export class CreateJobDto {

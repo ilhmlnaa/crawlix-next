@@ -44,6 +44,7 @@ export function DispatcherPage() {
   const [method, setMethod] = useState("GET");
   const [useCache, setUseCache] = useState(true);
   const [useProxy, setUseProxy] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
   const workers = overview?.workers ?? [];
@@ -64,6 +65,7 @@ export function DispatcherPage() {
       method: method.trim() || undefined,
       useCache,
       useProxy,
+      proxyUrl: proxyUrl.trim() || undefined,
     };
 
     return Object.fromEntries(
@@ -257,6 +259,16 @@ export function DispatcherPage() {
                         onChange={(e) => setWaitForSelector(e.target.value)}
                         placeholder="e.g. #main-content"
                         className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl"
+                      />
+                    </FieldLabel>
+
+                    <FieldLabel label="Proxy URL (Optional)">
+                      <Input
+                        value={proxyUrl}
+                        onChange={(e) => setProxyUrl(e.target.value)}
+                        placeholder="http://ip:port"
+                        disabled={!useProxy}
+                        className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl disabled:opacity-50"
                       />
                     </FieldLabel>
                   </div>
