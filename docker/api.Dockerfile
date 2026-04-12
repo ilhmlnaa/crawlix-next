@@ -27,4 +27,8 @@ ENV PORT=3001
 EXPOSE 3001
 
 WORKDIR /app/apps/api
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+	CMD ["node", "-e", "const p=process.env.API_PORT||'3001';fetch('http://localhost:'+p+'/api/health/live').then((r)=>process.exit(r.status<500?0:1)).catch(()=>process.exit(1))"]
+
 CMD ["node", "dist/main.js"]
