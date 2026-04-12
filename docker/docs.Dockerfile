@@ -17,7 +17,7 @@ RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 
 COPY --from=builder /app/apps/docs/.next/standalone ./
 COPY --from=builder /app/apps/docs/.next/static ./apps/docs/.next/static
-COPY --from=builder /app/apps/docs/public ./apps/docs/public
+# COPY --from=builder /app/apps/docs/public ./apps/docs/public
 
 RUN chown -R nextjs:nodejs /app
 
