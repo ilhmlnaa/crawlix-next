@@ -35,6 +35,7 @@ function StatusBadge({ status }: { status: ScrapeJobRecord["status"] }) {
     failed: "bg-rose-500/10 text-rose-400 border-rose-500/20",
     cancelled: "bg-[#1e293b] text-slate-400 border-[#334155]",
     queued: "bg-[#1e293b] text-slate-400 border-[#334155]",
+    timeout: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   };
   const labels: Record<ScrapeJobRecord["status"], string> = {
     completed: "Completed",
@@ -42,6 +43,7 @@ function StatusBadge({ status }: { status: ScrapeJobRecord["status"] }) {
     failed: "Failed",
     cancelled: "Cancelled",
     queued: "Pending",
+    timeout: "Timeout",
   };
   return (
     <span

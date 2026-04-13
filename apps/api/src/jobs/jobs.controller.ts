@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { SessionOrApiKeyGuard } from '../auth/guards/session-or-api-key.guard';
 import { JobsService } from './jobs.service';
@@ -10,8 +18,14 @@ export class JobsController {
 
   @Post()
   @UseGuards(SessionOrApiKeyGuard)
-  enqueue(@Body() body: CreateJobDto) {
-    return this.jobsService.enqueue(body);
+  enqueue(
+    @Body() body: CreateJobDto,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.jobsService.enqueue({
+      ...body,
+      idempotencyKey: body.idempotencyKey ?? idempotencyKey,
+    });
   }
 
   @Post(':jobId/retry')

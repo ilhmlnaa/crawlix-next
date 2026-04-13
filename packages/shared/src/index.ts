@@ -10,6 +10,10 @@ export interface JobKeys {
   result: string;
 }
 
+export interface IdempotencyKeys {
+  request: string;
+}
+
 function stableStringifyValue(value: unknown): string {
   if (value === null || value === undefined) {
     return 'null';
@@ -44,6 +48,21 @@ export function createJobId(): string {
   return crypto.randomUUID();
 }
 
+export function createEventId(): string {
+  return crypto.randomUUID();
+}
+
+export function createWebhookSignature(
+  secret: string,
+  timestamp: string,
+  rawBody: string,
+): string {
+  return crypto
+    .createHmac("sha256", secret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest("hex");
+}
+
 export function nowIso(): string {
   return new Date().toISOString();
 }
@@ -57,6 +76,20 @@ export function createJobKeys(prefix: string, jobId: string): JobKeys {
 
 export function createJobsIndexKey(prefix: string): string {
   return `${prefix}:index`;
+}
+
+export function createIdempotencyKeys(
+  prefix: string,
+  idempotencyKey: string,
+): IdempotencyKeys {
+  const digest = crypto
+    .createHash("sha256")
+    .update(idempotencyKey)
+    .digest("hex");
+
+  return {
+    request: `${prefix}:idempotency:${digest}`,
+  };
 }
 
 export function createWorkersIndexKey(prefix: string): string {

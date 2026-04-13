@@ -1,11 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { getApiRuntimeConfig } from '@repo/config';
 import type {
+  ScrapeJobStage,
   ScrapeJobRecord,
   ScrapeJobResult,
   ScrapeJobStatus,
 } from '@repo/queue-contracts';
-import { createJobKeys, createJobsIndexKey } from '@repo/shared';
+import {
+  createIdempotencyKeys,
+  createJobKeys,
+  createJobsIndexKey,
+} from '@repo/shared';
 import { RedisService } from '../infrastructure/redis.service';
 
 @Injectable()
@@ -22,6 +27,11 @@ export class JobStoreService {
 
   private get indexKey() {
     return createJobsIndexKey(this.config.redis.jobPrefix);
+  }
+
+  private getIdempotencyKey(idempotencyKey: string) {
+    return createIdempotencyKeys(this.config.redis.jobPrefix, idempotencyKey)
+      .request;
   }
 
   async saveRecord(record: ScrapeJobRecord): Promise<void> {
@@ -69,6 +79,29 @@ export class JobStoreService {
     await client.del(keys.result);
   }
 
+  async getIdempotentJob(
+    idempotencyKey: string,
+  ): Promise<ScrapeJobRecord | null> {
+    const client = this.redisService.getClient();
+    await client.connect().catch(() => undefined);
+    const jobId = await client.get(this.getIdempotencyKey(idempotencyKey));
+    return jobId ? this.getRecord(jobId) : null;
+  }
+
+  async saveIdempotentJob(
+    idempotencyKey: string,
+    jobId: string,
+  ): Promise<void> {
+    const client = this.redisService.getClient();
+    await client.connect().catch(() => undefined);
+    await client.set(
+      this.getIdempotencyKey(idempotencyKey),
+      jobId,
+      'EX',
+      this.config.redis.resultTtlSeconds,
+    );
+  }
+
   async updateStatus(
     jobId: string,
     status: ScrapeJobStatus,
@@ -90,11 +123,38 @@ export class JobStoreService {
     return updated;
   }
 
+  async updateProgress(
+    jobId: string,
+    progress: number,
+    stage: ScrapeJobStage,
+    error?: string,
+  ): Promise<ScrapeJobRecord | null> {
+    const existing = await this.getRecord(jobId);
+    if (!existing) {
+      return null;
+    }
+
+    const updated: ScrapeJobRecord = {
+      ...existing,
+      progress,
+      stage,
+      error,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.saveRecord(updated);
+    return updated;
+  }
+
   async listRecords(limit = 20): Promise<ScrapeJobRecord[]> {
     const client = this.redisService.getClient();
     await client.connect().catch(() => undefined);
     const jobIds = await client.lrange(this.indexKey, 0, limit - 1);
-    const records = await Promise.all(jobIds.map((jobId) => this.getRecord(jobId)));
-    return records.filter((record): record is ScrapeJobRecord => Boolean(record));
+    const records = await Promise.all(
+      jobIds.map((jobId) => this.getRecord(jobId)),
+    );
+    return records.filter((record): record is ScrapeJobRecord =>
+      Boolean(record),
+    );
   }
 }

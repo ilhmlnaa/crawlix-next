@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://storage.hamdiv.me/project/crawlix/crawlix-next.png" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
-
-<!-- https://media1.tenor.com/m/gWFk3_M14rkAAAAd/craft-anime.gif -->
+<img src="https://media1.tenor.com/m/gWFk3_M14rkAAAAd/craft-anime.gif" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
 
 <p>
   <img src="https://img.shields.io/badge/Next.js-16+-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js">
@@ -44,6 +42,7 @@ Crawlix Next separates request handling from job execution so the platform can s
 - [Health Endpoints](#health-endpoints)
 - [Testing and Verification](#testing-and-verification)
 - [Documentation](#documentation)
+- [Webhook Delivery Model](#webhook-delivery-model)
 - [Production Readiness Status](#production-readiness-status)
 - [Troubleshooting](#troubleshooting)
 
@@ -76,6 +75,8 @@ This design makes it practical to:
 - Session-based admin dashboard authentication for operators
 - API key authentication for programmatic job creation and polling
 - Retry queue and dead-letter queue handling for recoverable and permanent failures
+- Optional webhook delivery for terminal job events with dedicated retry and dead-letter queues
+- Idempotent job creation through `Idempotency-Key` or `idempotencyKey`
 - Worker heartbeat registry with `workerId`, hostname, status, counters, and queue metadata
 - Targeted worker dispatch through `targetWorkerId` in `POST /api/jobs`
 - Admin dashboard for queue metrics, worker fleet visibility, retry, cancel, and API key management
@@ -268,6 +269,11 @@ For standard local development, use the root `.env` file. The repository already
 | `RABBITMQ_QUEUE_NAME`              | Shared main queue name                             |
 | `RABBITMQ_RETRY_QUEUE_NAME`        | Shared retry queue                                 |
 | `RABBITMQ_DLQ_QUEUE_NAME`          | Shared dead-letter queue                           |
+| `RABBITMQ_WEBHOOK_QUEUE_NAME`      | Main queue for outbound webhook delivery           |
+| `RABBITMQ_WEBHOOK_RETRY_QUEUE_NAME`| Retry queue for webhook redelivery                 |
+| `RABBITMQ_WEBHOOK_DLQ_QUEUE_NAME`  | Dead-letter queue for exhausted webhook attempts   |
+| `WEBHOOK_SIGNING_SECRET`           | HMAC secret used to sign outbound webhook payloads |
+| `WEBHOOK_REQUEST_TIMEOUT_MS`       | Timeout used for webhook HTTP delivery             |
 | `SESSION_SECRET`                   | Cookie session signing secret                      |
 | `DASHBOARD_ADMIN_EMAIL`            | Seeded admin email                                 |
 | `DASHBOARD_ADMIN_PASSWORD`         | Seeded admin password                              |
@@ -457,6 +463,8 @@ pnpm --filter @repo/worker test:e2e
 - targeted worker routing behavior
 - retry and dead-letter handling
 - worker queue processing lifecycle
+- webhook delivery retry and dead-letter behavior
+- idempotent job creation for SDK-safe retries
 
 ---
 
@@ -470,6 +478,17 @@ Useful references:
 - Deployment guide: [docs/deployment.md](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\docs\deployment.md)
 - Public jobs API docs: [apps/docs/content/docs/api/jobs.mdx](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\docs\content\docs\api\jobs.mdx)
 - Worker runtime docs: [apps/docs/content/docs/worker/runtime.mdx](E:\Data Kuliah\Tingkat 4\nganggur\EndGame\crawlix-next\apps\docs\content\docs\worker\runtime.mdx)
+
+## Webhook Delivery Model
+
+- Polling remains the baseline integration model for all clients.
+- `webhookUrl` can be supplied per job when the integrator prefers push callbacks.
+- Webhook payloads are signed with:
+  - `x-crawlix-event`
+  - `x-crawlix-event-id`
+  - `x-crawlix-timestamp`
+  - `x-crawlix-signature`
+- Webhook delivery is isolated from scrape execution through dedicated webhook queues, so callback failures do not block scraping workers.
 
 ---
 

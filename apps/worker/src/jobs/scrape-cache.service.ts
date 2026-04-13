@@ -41,6 +41,8 @@ export class ScrapeCacheService {
     return {
       jobId: job.jobId,
       status: 'completed',
+      progress: 100,
+      stage: 'completed',
       url: job.url,
       strategy: job.strategy,
       requestedAt: job.requestedAt,
@@ -52,6 +54,8 @@ export class ScrapeCacheService {
       responseTimeMs: cached.responseTimeMs,
       retries: cached.retries,
       cached: true,
+      webhookUrl: job.webhookUrl,
+      idempotencyKey: job.idempotencyKey,
     };
   }
 

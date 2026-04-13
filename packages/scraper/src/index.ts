@@ -4,6 +4,7 @@ import {
 } from "@repo/config";
 import type {
   ScrapeJobMessage,
+  ScrapeJobStage,
   ScrapeJobOptions,
   ScrapeJobResult,
   ScrapeStrategy,
@@ -13,6 +14,7 @@ import { summarizeContent } from "@repo/shared";
 
 export interface ScrapeExecutionContext {
   config?: ScraperRuntimeConfig;
+  onStageChange?: (stage: ScrapeJobStage, progress: number) => Promise<void> | void;
 }
 
 interface ScraperStrategyResult {
@@ -61,6 +63,7 @@ function readConfig(
 ): Required<ScrapeExecutionContext> {
   return {
     config: context?.config ?? getWorkerRuntimeConfig().scraper,
+    onStageChange: context?.onStageChange ?? (() => undefined),
   };
 }
 
@@ -246,6 +249,7 @@ async function executeHttpFetch(
   context: Required<ScrapeExecutionContext>,
   methodLabel: string,
 ): Promise<ScraperStrategyResult> {
+  await context.onStageChange("fetching", 15);
   const startedAt = Date.now();
   const { options } = job;
   const controller = new AbortController();
@@ -261,6 +265,7 @@ async function executeHttpFetch(
     });
 
     const content = await response.text();
+    await context.onStageChange("extracting", 85);
 
     if (!response.ok) {
       return {
@@ -308,6 +313,7 @@ class CloudscraperStrategy implements ScraperStrategy {
     ) as (specifier: string) => Promise<any>;
 
     try {
+      await context.onStageChange("fetching", 15);
       const cloudscraperModule = await dynamicImport("cloudscraper");
       const cloudscraper = cloudscraperModule.default ?? cloudscraperModule;
       const startedAt = Date.now();
@@ -328,6 +334,7 @@ class CloudscraperStrategy implements ScraperStrategy {
         typeof response.body === "string"
           ? response.body
           : JSON.stringify(response.body);
+      await context.onStageChange("extracting", 85);
 
       return {
         success: true,
@@ -389,6 +396,7 @@ class PlaywrightStrategy implements ScraperStrategy {
         proxyUrl,
         context.config,
       );
+      await context.onStageChange("rendering", 40);
       const page = await browser.newPage({
         userAgent: context.config.userAgent,
       });
@@ -401,6 +409,7 @@ class PlaywrightStrategy implements ScraperStrategy {
           waitUntil,
         });
 
+        await context.onStageChange("waiting_selector", 60);
         await maybeWaitForSelector(
           page,
           job.options.waitForSelector,
@@ -413,6 +422,7 @@ class PlaywrightStrategy implements ScraperStrategy {
         );
         await maybeWaitAdditionalDelay(page, job.options.additionalDelayMs);
 
+        await context.onStageChange("extracting", 85);
         const contentType = response?.headers()["content-type"] ?? "text/html";
         const content = contentType.includes("text/html")
           ? await page.content()
@@ -452,6 +462,8 @@ function createFailureResult(
   return {
     jobId: job.jobId,
     status: "failed",
+    progress: 100,
+    stage: "completed",
     url: job.url,
     strategy: job.strategy,
     requestedAt: job.requestedAt,
@@ -470,6 +482,8 @@ function createSuccessResult(
   return {
     jobId: job.jobId,
     status: "completed",
+    progress: 100,
+    stage: "completed",
     url: job.url,
     strategy: job.strategy,
     requestedAt: job.requestedAt,

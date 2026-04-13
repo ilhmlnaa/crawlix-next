@@ -50,15 +50,39 @@ curl -X POST http://localhost:3001/api/jobs \
   }'
 ```
 
+### Example Request With Webhook and Idempotency
+
+Use `webhookUrl` when you want Crawlix Next to push a terminal job event to your server, and provide `Idempotency-Key` to make client retries safe.
+
+```bash
+curl -X POST http://localhost:3001/api/jobs \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: cx_your_api_key_here" \
+  -H "Idempotency-Key: job-request-001" \
+  -d '{
+    "url": "https://example.com",
+    "strategy": "auto",
+    "webhookUrl": "https://your-app.example/webhooks/crawlix",
+    "options": {
+      "timeoutMs": 30000,
+      "useCache": true
+    }
+  }'
+```
+
 ### Example Response
 
 ```json
 {
   "jobId": "job_01hrx8qj2b1j6m3n9t1",
   "status": "queued",
+  "progress": 0,
+  "stage": "queued",
   "queuedAt": "2026-04-11T07:10:25.000Z",
   "resultTtlSeconds": 3600,
-  "targetWorkerId": "worker-host123-4567"
+  "targetWorkerId": "worker-host123-4567",
+  "webhookUrl": "https://your-app.example/webhooks/crawlix",
+  "idempotencyKey": "job-request-001"
 }
 ```
 
@@ -79,12 +103,16 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1 \
 {
   "jobId": "job_01hrx8qj2b1j6m3n9t1",
   "status": "processing",
+  "progress": 40,
+  "stage": "rendering",
   "url": "https://example.com",
   "strategy": "auto",
   "requestedAt": "2026-04-11T07:10:25.000Z",
   "updatedAt": "2026-04-11T07:10:29.000Z",
   "fingerprint": "fp_2d5e2d...",
   "targetWorkerId": "worker-host123-4567",
+  "webhookUrl": "https://your-app.example/webhooks/crawlix",
+  "idempotencyKey": "job-request-001",
   "options": {
     "timeoutMs": 30000,
     "useCache": true
@@ -109,6 +137,8 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
 {
   "jobId": "job_01hrx8qj2b1j6m3n9t1",
   "status": "completed",
+  "progress": 100,
+  "stage": "completed",
   "url": "https://example.com",
   "strategy": "cloudscraper",
   "requestedAt": "2026-04-11T07:10:25.000Z",
@@ -119,7 +149,9 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
   "responseTimeMs": 842,
   "retries": 0,
   "cached": false,
-  "targetWorkerId": "worker-host123-4567"
+  "targetWorkerId": "worker-host123-4567",
+  "webhookUrl": "https://your-app.example/webhooks/crawlix",
+  "idempotencyKey": "job-request-001"
 }
 ```
 
@@ -130,6 +162,9 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
   "url": "https://example.com",
   "strategy": "auto",
   "targetWorkerId": "worker-host123-4567",
+  "webhookUrl": "https://your-app.example/webhooks/crawlix",
+  "webhookSecret": "optional-per-job-secret",
+  "idempotencyKey": "job-request-001",
   "options": {
     "timeoutMs": 30000,
     "method": "GET",
@@ -174,9 +209,18 @@ If you want proxy routing per job, use `options.useProxy` and optionally `option
 - `strategy` supports `auto`, `cloudscraper`, and `playwright`.
 - `auto` is the recommended default.
 - `targetWorkerId` is optional. Omit it to let Crawlix Next auto-assign the job through the shared queue.
+- `webhookUrl` is optional. When present, Crawlix Next will push terminal job events like `job.completed` and `job.failed` to that endpoint.
+- `webhookSecret` is optional. If omitted, the worker falls back to the global `WEBHOOK_SIGNING_SECRET`.
+- `idempotencyKey` can be supplied in the request body or the `Idempotency-Key` header.
+- Job status now includes `progress` and `stage` so polling clients can show richer job lifecycle updates.
 - If `targetWorkerId` is provided, the API validates that the worker is still active before accepting the job.
 - Targeted jobs keep their worker affinity during retry and are dispatched to the selected worker queue, not the shared queue.
 - Status polling is the default client pattern in v1.
+- Webhook payloads are signed using HMAC SHA-256 headers:
+  - `x-crawlix-event`
+  - `x-crawlix-event-id`
+  - `x-crawlix-timestamp`
+  - `x-crawlix-signature`
 - Admin-only endpoints like retry and cancel are intentionally omitted from request examples in this docs section.
 - Proxy decision order:
   1. if `options.useProxy` is `false`, Crawlix does not use a proxy.

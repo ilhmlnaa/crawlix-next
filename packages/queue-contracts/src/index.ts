@@ -5,7 +5,16 @@ export type ScrapeJobStatus =
   | "processing"
   | "completed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "timeout";
+
+export type ScrapeJobStage =
+  | "queued"
+  | "fetching"
+  | "rendering"
+  | "waiting_selector"
+  | "extracting"
+  | "completed";
 
 export type ScrapeStrategy = "cloudscraper" | "playwright" | "auto";
 
@@ -38,6 +47,9 @@ export interface CreateScrapeJobInput {
   strategy?: ScrapeStrategy;
   options?: ScrapeJobOptions;
   targetWorkerId?: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  idempotencyKey?: string;
 }
 
 export interface ScrapeJobMessage {
@@ -50,11 +62,16 @@ export interface ScrapeJobMessage {
   targetWorkerId?: string;
   retriedFromJobId?: string;
   deliveryAttempt?: number;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  idempotencyKey?: string;
 }
 
 export interface ScrapeJobRecord {
   jobId: string;
   status: ScrapeJobStatus;
+  progress: number;
+  stage: ScrapeJobStage;
   url: string;
   strategy: ScrapeStrategy;
   requestedAt: string;
@@ -63,12 +80,17 @@ export interface ScrapeJobRecord {
   options: ScrapeJobOptions;
   targetWorkerId?: string;
   retriedFromJobId?: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  idempotencyKey?: string;
   error?: string;
 }
 
 export interface ScrapeJobResult {
   jobId: string;
   status: ScrapeJobStatus;
+  progress: number;
+  stage: ScrapeJobStage;
   url: string;
   strategy: ScrapeStrategy;
   requestedAt: string;
@@ -82,16 +104,22 @@ export interface ScrapeJobResult {
   cached?: boolean;
   targetWorkerId?: string;
   retriedFromJobId?: string;
+  webhookUrl?: string;
+  idempotencyKey?: string;
   error?: string;
 }
 
 export interface EnqueueJobResponse {
   jobId: string;
   status: ScrapeJobStatus;
+  progress: number;
+  stage: ScrapeJobStage;
   queuedAt: string;
   resultTtlSeconds: number;
   targetWorkerId?: string;
   retriedFromJobId?: string;
+  webhookUrl?: string;
+  idempotencyKey?: string;
 }
 
 export interface JobsDashboardSnapshot {
@@ -125,8 +153,43 @@ export interface JobsOverviewSnapshot {
   consumerCount: number;
   retryQueueDepth: number;
   deadLetterQueueDepth: number;
+  webhookQueueDepth: number;
+  webhookRetryQueueDepth: number;
+  webhookDeadLetterQueueDepth: number;
   workers: WorkerHeartbeat[];
   recentJobs: ScrapeJobRecord[];
+}
+
+export type WebhookEventName =
+  | "job.completed"
+  | "job.failed"
+  | "job.cancelled"
+  | "job.timeout";
+
+export interface WebhookEventPayload {
+  event: WebhookEventName;
+  eventId: string;
+  timestamp: string;
+  data: {
+    jobId: string;
+    status: ScrapeJobStatus;
+    url: string;
+    strategy: ScrapeStrategy;
+    requestedAt: string;
+    completedAt?: string;
+    targetWorkerId?: string;
+    idempotencyKey?: string;
+    error?: string;
+  };
+}
+
+export interface WebhookDeliveryMessage {
+  eventId: string;
+  event: WebhookEventName;
+  webhookUrl: string;
+  webhookSecret?: string;
+  payload: WebhookEventPayload;
+  deliveryAttempt?: number;
 }
 
 export interface AuthenticatedAdmin {

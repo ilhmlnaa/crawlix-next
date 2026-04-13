@@ -99,4 +99,16 @@ export class CreateJobDto {
   @IsOptional()
   @IsString()
   targetWorkerId?: string;
+
+  @IsOptional()
+  @IsUrl()
+  webhookUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  webhookSecret?: string;
+
+  @IsOptional()
+  @IsString()
+  idempotencyKey?: string;
 }

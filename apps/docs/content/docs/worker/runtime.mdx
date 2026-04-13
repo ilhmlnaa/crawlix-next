@@ -41,6 +41,12 @@ Example response:
     "deadLetterQueueName": "crawlix.scrape.jobs.worker.worker-host123-4567.dlq",
     "connected": true
   },
+  "webhook": {
+    "connected": true,
+    "queueName": "crawlix.scrape.webhooks",
+    "retryQueueName": "crawlix.scrape.webhooks.retry",
+    "deadLetterQueueName": "crawlix.scrape.webhooks.dlq"
+  },
   "browser": {
     "directBrowserActive": false,
     "proxyBrowserActive": false
@@ -56,6 +62,9 @@ Example response:
 - Each worker also exposes a stable `workerId` for the current runtime and consumes a dedicated queue shaped like `crawlix.scrape.jobs.worker.<workerId>`.
 - Jobs created with `targetWorkerId` are published only to that worker-specific queue. They do not fall back to the shared queue automatically.
 - The admin dashboard can list active workers and use their `workerId` for targeted dispatch decisions.
+- Terminal job events can be pushed to third-party systems through a dedicated webhook queue that is separate from the scrape execution queue.
+- Webhook delivery uses its own retry and dead-letter queues, so webhook callback failures do not block scrape workers from finishing jobs.
+- Workers sign outbound webhook payloads with `WEBHOOK_SIGNING_SECRET` unless the job explicitly carries its own `webhookSecret`.
 - Proxy is resolved in worker runtime from each job options with this precedence:
   - if `useProxy` is `false`, no proxy is used.
   - if `useProxy` is `true` and `proxyUrl` is provided, worker uses that URL.

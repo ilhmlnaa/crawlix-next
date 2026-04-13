@@ -10,14 +10,11 @@ import {
   type ScrapeJobRecord,
   type WorkerHeartbeat,
 } from '@repo/queue-contracts';
-import {
-  createJobId,
-  createQueueFingerprint,
-  nowIso,
-} from '@repo/shared';
+import { createJobId, createQueueFingerprint, nowIso } from '@repo/shared';
 import { JobStoreService } from './job-store.service';
 import { QueuePublisherService } from '../infrastructure/queue-publisher.service';
 import { WorkerRegistryService } from './worker-registry.service';
+import { WebhookEventService } from './webhook-event.service';
 
 @Injectable()
 export class JobsService {
@@ -25,6 +22,7 @@ export class JobsService {
     private readonly jobStore: JobStoreService,
     private readonly publisher: QueuePublisherService,
     private readonly workerRegistry: WorkerRegistryService,
+    private readonly webhookEvents: WebhookEventService,
   ) {}
 
   async enqueue(input: CreateScrapeJobInput): Promise<EnqueueJobResponse> {
@@ -49,6 +47,27 @@ export class JobsService {
     const jobId = createJobId();
     const fingerprint = createQueueFingerprint(input.url, strategy, options);
     const targetWorkerId = input.targetWorkerId?.trim() || undefined;
+    const webhookUrl = input.webhookUrl?.trim() || undefined;
+    const webhookSecret = input.webhookSecret?.trim() || undefined;
+    const idempotencyKey = input.idempotencyKey?.trim() || undefined;
+
+    if (idempotencyKey) {
+      const existing = await this.jobStore.getIdempotentJob(idempotencyKey);
+      if (existing) {
+        return {
+          jobId: existing.jobId,
+          status: existing.status,
+          progress: existing.progress,
+          stage: existing.stage,
+          queuedAt: existing.requestedAt,
+          resultTtlSeconds: config.redis.resultTtlSeconds,
+          targetWorkerId: existing.targetWorkerId,
+          retriedFromJobId: existing.retriedFromJobId,
+          webhookUrl: existing.webhookUrl,
+          idempotencyKey: existing.idempotencyKey,
+        };
+      }
+    }
 
     if (targetWorkerId) {
       const worker = await this.workerRegistry.getWorkerById(targetWorkerId);
@@ -65,11 +84,16 @@ export class JobsService {
       strategy,
       options,
       status: DEFAULT_JOB_STATUS,
+      progress: 0,
+      stage: 'queued',
       requestedAt,
       updatedAt: requestedAt,
       fingerprint,
       targetWorkerId,
       retriedFromJobId,
+      webhookUrl,
+      webhookSecret,
+      idempotencyKey,
     };
 
     const message: ScrapeJobMessage = {
@@ -81,18 +105,28 @@ export class JobsService {
       fingerprint,
       targetWorkerId,
       retriedFromJobId,
+      webhookUrl,
+      webhookSecret,
+      idempotencyKey,
     };
 
     await this.jobStore.saveRecord(record);
+    if (idempotencyKey) {
+      await this.jobStore.saveIdempotentJob(idempotencyKey, jobId);
+    }
     await this.publisher.publish(message);
 
     return {
       jobId,
       status: DEFAULT_JOB_STATUS,
+      progress: 0,
+      stage: 'queued',
       queuedAt: requestedAt,
       resultTtlSeconds: config.redis.resultTtlSeconds,
       targetWorkerId,
       retriedFromJobId,
+      webhookUrl,
+      idempotencyKey,
     };
   }
 
@@ -109,6 +143,8 @@ export class JobsService {
         strategy: existing.strategy,
         options: existing.options,
         targetWorkerId: existing.targetWorkerId,
+        webhookUrl: existing.webhookUrl,
+        webhookSecret: existing.webhookSecret,
       },
       existing.jobId,
     );
@@ -125,8 +161,44 @@ export class JobsService {
       return existing;
     }
 
-    await this.jobStore.updateStatus(jobId, 'cancelled');
-    await this.jobStore.deleteResult(jobId);
+    const updated = await this.jobStore.updateStatus(jobId, 'cancelled');
+    await this.jobStore.updateProgress(jobId, 100, 'completed', existing.error);
+    const completedAt = nowIso();
+    await this.jobStore.saveResult({
+      jobId: existing.jobId,
+      status: 'cancelled',
+      progress: 100,
+      stage: 'completed',
+      url: existing.url,
+      strategy: existing.strategy,
+      requestedAt: existing.requestedAt,
+      completedAt,
+      targetWorkerId: existing.targetWorkerId,
+      retriedFromJobId: existing.retriedFromJobId,
+      webhookUrl: existing.webhookUrl,
+      idempotencyKey: existing.idempotencyKey,
+      error: 'Job was cancelled before processing started.',
+    });
+    if (updated?.webhookUrl) {
+      await this.webhookEvents.publishFromResult(
+        {
+          jobId: existing.jobId,
+          status: 'cancelled',
+          progress: 100,
+          stage: 'completed',
+          url: existing.url,
+          strategy: existing.strategy,
+          requestedAt: existing.requestedAt,
+          completedAt,
+          targetWorkerId: existing.targetWorkerId,
+          retriedFromJobId: existing.retriedFromJobId,
+          webhookUrl: existing.webhookUrl,
+          idempotencyKey: existing.idempotencyKey,
+          error: 'Job was cancelled before processing started.',
+        },
+        existing.webhookSecret,
+      );
+    }
     return this.jobStore.getRecord(jobId);
   }
 
@@ -158,9 +230,14 @@ export class JobsService {
       consumerCount: 0,
       retryMessageCount: 0,
       deadLetterMessageCount: 0,
+      webhookMessageCount: 0,
+      webhookRetryMessageCount: 0,
+      webhookDeadLetterMessageCount: 0,
     }));
 
-    const statusCounts = recentJobs.reduce<JobsOverviewSnapshot['statusCounts']>(
+    const statusCounts = recentJobs.reduce<
+      JobsOverviewSnapshot['statusCounts']
+    >(
       (accumulator, job) => {
         accumulator[job.status] += 1;
         return accumulator;
@@ -171,6 +248,7 @@ export class JobsService {
         completed: 0,
         failed: 0,
         cancelled: 0,
+        timeout: 0,
       },
     );
 
@@ -182,6 +260,9 @@ export class JobsService {
       consumerCount: queueStats.consumerCount,
       retryQueueDepth: queueStats.retryMessageCount,
       deadLetterQueueDepth: queueStats.deadLetterMessageCount,
+      webhookQueueDepth: queueStats.webhookMessageCount,
+      webhookRetryQueueDepth: queueStats.webhookRetryMessageCount,
+      webhookDeadLetterQueueDepth: queueStats.webhookDeadLetterMessageCount,
       workers,
       recentJobs,
     };

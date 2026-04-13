@@ -8,6 +8,7 @@ import { JobStoreService } from './job-store.service';
 import { QueuePublisherService } from '../infrastructure/queue-publisher.service';
 import { RedisService } from '../infrastructure/redis.service';
 import { WorkerRegistryService } from './worker-registry.service';
+import { WebhookEventService } from './webhook-event.service';
 
 @Module({
   imports: [AuthModule, AdminModule],
@@ -18,6 +19,7 @@ import { WorkerRegistryService } from './worker-registry.service';
     QueuePublisherService,
     RedisService,
     WorkerRegistryService,
+    WebhookEventService,
   ],
   exports: [
     JobsService,
@@ -25,6 +27,7 @@ import { WorkerRegistryService } from './worker-registry.service';
     QueuePublisherService,
     WorkerRegistryService,
     RedisService,
+    WebhookEventService,
   ],
 })
 export class JobsModule {}

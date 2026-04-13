@@ -36,13 +36,18 @@ describe('QueueConsumerService retry and DLQ flow', () => {
     };
     const jobStore = {
       updateStatus: jest.fn().mockResolvedValue(null),
+      updateProgress: jest.fn().mockResolvedValue(null),
       saveResult: jest.fn().mockResolvedValue(undefined),
+    };
+    const webhookDispatcher = {
+      enqueueFromResult: jest.fn().mockResolvedValue(undefined),
     };
 
     const service = new QueueConsumerService(
       processor as never,
       jobStore as never,
       workerHeartbeat as never,
+      webhookDispatcher as never,
     );
 
     const channel = {
@@ -70,7 +75,11 @@ describe('QueueConsumerService retry and DLQ flow', () => {
       },
     } as unknown as ConsumeMessage;
 
-    await (service as unknown as { handleMessage: (message: ConsumeMessage) => Promise<void> }).handleMessage(message);
+    await (
+      service as unknown as {
+        handleMessage: (message: ConsumeMessage) => Promise<void>;
+      }
+    ).handleMessage(message);
 
     expect(jobStore.updateStatus).toHaveBeenCalledWith(
       'job-1',
@@ -93,13 +102,18 @@ describe('QueueConsumerService retry and DLQ flow', () => {
     };
     const jobStore = {
       updateStatus: jest.fn().mockResolvedValue(null),
+      updateProgress: jest.fn().mockResolvedValue(null),
       saveResult: jest.fn().mockResolvedValue(undefined),
+    };
+    const webhookDispatcher = {
+      enqueueFromResult: jest.fn().mockResolvedValue(undefined),
     };
 
     const service = new QueueConsumerService(
       processor as never,
       jobStore as never,
       workerHeartbeat as never,
+      webhookDispatcher as never,
     );
 
     const channel = {
@@ -127,7 +141,11 @@ describe('QueueConsumerService retry and DLQ flow', () => {
       },
     } as unknown as ConsumeMessage;
 
-    await (service as unknown as { handleMessage: (message: ConsumeMessage) => Promise<void> }).handleMessage(message);
+    await (
+      service as unknown as {
+        handleMessage: (message: ConsumeMessage) => Promise<void>;
+      }
+    ).handleMessage(message);
 
     expect(jobStore.updateStatus).toHaveBeenCalledWith(
       'job-2',
@@ -154,13 +172,18 @@ describe('QueueConsumerService retry and DLQ flow', () => {
     };
     const jobStore = {
       updateStatus: jest.fn().mockResolvedValue(null),
+      updateProgress: jest.fn().mockResolvedValue(null),
       saveResult: jest.fn().mockResolvedValue(undefined),
+    };
+    const webhookDispatcher = {
+      enqueueFromResult: jest.fn().mockResolvedValue(undefined),
     };
 
     const service = new QueueConsumerService(
       processor as never,
       jobStore as never,
       workerHeartbeat as never,
+      webhookDispatcher as never,
     );
 
     const channel = {
@@ -189,7 +212,11 @@ describe('QueueConsumerService retry and DLQ flow', () => {
       },
     } as unknown as ConsumeMessage;
 
-    await (service as unknown as { handleMessage: (message: ConsumeMessage) => Promise<void> }).handleMessage(message);
+    await (
+      service as unknown as {
+        handleMessage: (message: ConsumeMessage) => Promise<void>;
+      }
+    ).handleMessage(message);
 
     expect(channel.sendToQueue).toHaveBeenCalledWith(
       'crawlix.scrape.jobs.worker.worker-host123-4567.retry',

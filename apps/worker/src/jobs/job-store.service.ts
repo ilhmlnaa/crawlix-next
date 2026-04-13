@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { getWorkerRuntimeConfig } from '@repo/config';
 import type {
+  ScrapeJobStage,
   ScrapeJobRecord,
   ScrapeJobResult,
   ScrapeJobStatus,
@@ -75,6 +76,29 @@ export class JobStoreService {
     const updated: ScrapeJobRecord = {
       ...existing,
       status,
+      error,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.saveRecord(updated);
+    return updated;
+  }
+
+  async updateProgress(
+    jobId: string,
+    progress: number,
+    stage: ScrapeJobStage,
+    error?: string,
+  ): Promise<ScrapeJobRecord | null> {
+    const existing = await this.getRecord(jobId);
+    if (!existing) {
+      return null;
+    }
+
+    const updated: ScrapeJobRecord = {
+      ...existing,
+      progress,
+      stage,
       error,
       updatedAt: new Date().toISOString(),
     };

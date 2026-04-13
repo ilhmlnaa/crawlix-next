@@ -3,6 +3,7 @@ import { getWorkerRuntimeConfig } from '@repo/config';
 import { RedisService } from '../infrastructure/redis.service';
 import { JobProcessorService } from '../jobs/job-processor.service';
 import { QueueConsumerService } from '../jobs/queue-consumer.service';
+import { WebhookDispatcherService } from '../jobs/webhook-dispatcher.service';
 
 @Injectable()
 export class WorkerHealthService {
@@ -10,6 +11,7 @@ export class WorkerHealthService {
     private readonly redisService: RedisService,
     private readonly queueConsumer: QueueConsumerService,
     private readonly jobProcessor: JobProcessorService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   live() {
@@ -37,6 +39,7 @@ export class WorkerHealthService {
       checks: {
         redis: redisPing === 'PONG' ? 'ok' : 'failed',
         queue: queueStatus,
+        webhook: this.webhookDispatcher.getStatus(),
         browserPool: this.jobProcessor.getRuntimeStats(),
       },
     };

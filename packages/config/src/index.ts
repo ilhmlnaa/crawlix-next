@@ -3,8 +3,13 @@ export interface QueueConfig {
   queueName: string;
   retryQueueName: string;
   deadLetterQueueName: string;
+  webhookQueueName: string;
+  webhookRetryQueueName: string;
+  webhookDeadLetterQueueName: string;
   retryDelayMs: number;
   maxDeliveryAttempts: number;
+  webhookRetryDelayMs: number;
+  webhookMaxDeliveryAttempts: number;
 }
 
 export interface RedisConfig {
@@ -22,6 +27,7 @@ export interface ApiRuntimeConfig {
   redis: RedisConfig;
   scraper: ScraperRuntimeConfig;
   auth: AuthRuntimeConfig;
+  webhook: WebhookRuntimeConfig;
 }
 
 export interface WorkerRuntimeConfig {
@@ -30,6 +36,7 @@ export interface WorkerRuntimeConfig {
   queue: QueueConfig;
   redis: RedisConfig;
   scraper: ScraperRuntimeConfig;
+  webhook: WebhookRuntimeConfig;
 }
 
 export interface WebRuntimeConfig {
@@ -44,6 +51,11 @@ export interface AuthRuntimeConfig {
   adminEmail: string;
   adminPassword: string;
   apiKeyPrefix: string;
+}
+
+export interface WebhookRuntimeConfig {
+  signingSecret: string;
+  requestTimeoutMs: number;
 }
 
 export interface ScraperRuntimeConfig {
@@ -84,8 +96,22 @@ function readQueueConfig(env: NodeJS.ProcessEnv): QueueConfig {
       env.RABBITMQ_RETRY_QUEUE_NAME ?? "crawlix.scrape.jobs.retry",
     deadLetterQueueName:
       env.RABBITMQ_DLQ_QUEUE_NAME ?? "crawlix.scrape.jobs.dlq",
+    webhookQueueName:
+      env.RABBITMQ_WEBHOOK_QUEUE_NAME ?? "crawlix.scrape.webhooks",
+    webhookRetryQueueName:
+      env.RABBITMQ_WEBHOOK_RETRY_QUEUE_NAME ?? "crawlix.scrape.webhooks.retry",
+    webhookDeadLetterQueueName:
+      env.RABBITMQ_WEBHOOK_DLQ_QUEUE_NAME ?? "crawlix.scrape.webhooks.dlq",
     retryDelayMs: readNumber(env.RABBITMQ_RETRY_DELAY_MS, 15000),
     maxDeliveryAttempts: readNumber(env.RABBITMQ_MAX_DELIVERY_ATTEMPTS, 3),
+    webhookRetryDelayMs: readNumber(
+      env.RABBITMQ_WEBHOOK_RETRY_DELAY_MS,
+      15000,
+    ),
+    webhookMaxDeliveryAttempts: readNumber(
+      env.RABBITMQ_WEBHOOK_MAX_DELIVERY_ATTEMPTS,
+      5,
+    ),
   };
 }
 
@@ -126,6 +152,18 @@ function validateQueueConfig(config: QueueConfig): QueueConfig {
       config.deadLetterQueueName,
       "RABBITMQ_DLQ_QUEUE_NAME",
     ),
+    webhookQueueName: assertNonEmpty(
+      config.webhookQueueName,
+      "RABBITMQ_WEBHOOK_QUEUE_NAME",
+    ),
+    webhookRetryQueueName: assertNonEmpty(
+      config.webhookRetryQueueName,
+      "RABBITMQ_WEBHOOK_RETRY_QUEUE_NAME",
+    ),
+    webhookDeadLetterQueueName: assertNonEmpty(
+      config.webhookDeadLetterQueueName,
+      "RABBITMQ_WEBHOOK_DLQ_QUEUE_NAME",
+    ),
     retryDelayMs: assertPositiveInteger(
       config.retryDelayMs,
       "RABBITMQ_RETRY_DELAY_MS",
@@ -133,6 +171,14 @@ function validateQueueConfig(config: QueueConfig): QueueConfig {
     maxDeliveryAttempts: assertPositiveInteger(
       config.maxDeliveryAttempts,
       "RABBITMQ_MAX_DELIVERY_ATTEMPTS",
+    ),
+    webhookRetryDelayMs: assertPositiveInteger(
+      config.webhookRetryDelayMs,
+      "RABBITMQ_WEBHOOK_RETRY_DELAY_MS",
+    ),
+    webhookMaxDeliveryAttempts: assertPositiveInteger(
+      config.webhookMaxDeliveryAttempts,
+      "RABBITMQ_WEBHOOK_MAX_DELIVERY_ATTEMPTS",
     ),
   };
 }
@@ -210,6 +256,21 @@ function validateAuthConfig(config: AuthRuntimeConfig): AuthRuntimeConfig {
   };
 }
 
+function validateWebhookConfig(
+  config: WebhookRuntimeConfig,
+): WebhookRuntimeConfig {
+  return {
+    signingSecret: assertNonEmpty(
+      config.signingSecret,
+      "WEBHOOK_SIGNING_SECRET",
+    ),
+    requestTimeoutMs: assertPositiveInteger(
+      config.requestTimeoutMs,
+      "WEBHOOK_REQUEST_TIMEOUT_MS",
+    ),
+  };
+}
+
 export function validateApiRuntimeConfig(
   config: ApiRuntimeConfig,
 ): ApiRuntimeConfig {
@@ -226,6 +287,7 @@ export function validateApiRuntimeConfig(
     redis: validateRedisConfig(config.redis),
     scraper: validateScraperConfig(config.scraper),
     auth: validateAuthConfig(config.auth),
+    webhook: validateWebhookConfig(config.webhook),
   };
 }
 
@@ -239,6 +301,7 @@ export function validateWorkerRuntimeConfig(
     queue: validateQueueConfig(config.queue),
     redis: validateRedisConfig(config.redis),
     scraper: validateScraperConfig(config.scraper),
+    webhook: validateWebhookConfig(config.webhook),
   };
 }
 
@@ -300,6 +363,14 @@ function readAuthConfig(env: NodeJS.ProcessEnv): AuthRuntimeConfig {
   };
 }
 
+function readWebhookConfig(env: NodeJS.ProcessEnv): WebhookRuntimeConfig {
+  return {
+    signingSecret:
+      env.WEBHOOK_SIGNING_SECRET ?? "change-me-webhook-signing-secret",
+    requestTimeoutMs: readNumber(env.WEBHOOK_REQUEST_TIMEOUT_MS, 10000),
+  };
+}
+
 export function getApiRuntimeConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): ApiRuntimeConfig {
@@ -315,6 +386,7 @@ export function getApiRuntimeConfig(
     redis: readRedisConfig(env),
     scraper: readScraperConfig(env),
     auth: readAuthConfig(env),
+    webhook: readWebhookConfig(env),
   };
 }
 
@@ -327,6 +399,7 @@ export function getWorkerRuntimeConfig(
     queue: readQueueConfig(env),
     redis: readRedisConfig(env),
     scraper: readScraperConfig(env),
+    webhook: readWebhookConfig(env),
   };
 }
 

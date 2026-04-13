@@ -18,6 +18,7 @@ import {
 import { JobProcessorService } from './job-processor.service';
 import { JobStoreService } from './job-store.service';
 import { WorkerHeartbeatService } from './worker-heartbeat.service';
+import { WebhookDispatcherService } from './webhook-dispatcher.service';
 import {
   logJobFailure,
   logJobRetry,
@@ -36,6 +37,7 @@ export class QueueConsumerService
     private readonly processor: JobProcessorService,
     private readonly jobStore: JobStoreService,
     private readonly workerHeartbeat: WorkerHeartbeatService,
+    private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
   private getRoutingQueues(targetWorkerId?: string) {
@@ -49,7 +51,10 @@ export class QueueConsumerService
     }
 
     return {
-      queueName: createTargetedQueueName(config.queue.queueName, targetWorkerId),
+      queueName: createTargetedQueueName(
+        config.queue.queueName,
+        targetWorkerId,
+      ),
       retryQueueName: createTargetedRetryQueueName(
         config.queue.queueName,
         targetWorkerId,
@@ -139,6 +144,12 @@ export class QueueConsumerService
 
       if (currentAttempt < config.queue.maxDeliveryAttempts) {
         await this.jobStore.updateStatus(payload.jobId, 'queued', errorMessage);
+        await this.jobStore.updateProgress(
+          payload.jobId,
+          0,
+          'queued',
+          errorMessage,
+        );
         this.channel.sendToQueue(
           routingQueues.retryQueueName,
           Buffer.from(
@@ -165,9 +176,17 @@ export class QueueConsumerService
       }
 
       await this.jobStore.updateStatus(payload.jobId, 'failed', errorMessage);
-      await this.jobStore.saveResult({
+      await this.jobStore.updateProgress(
+        payload.jobId,
+        100,
+        'completed',
+        errorMessage,
+      );
+      const failedResult = {
         jobId: payload.jobId,
         status: 'failed',
+        progress: 100,
+        stage: 'completed',
         url: payload.url,
         strategy: payload.strategy,
         requestedAt: payload.requestedAt,
@@ -175,8 +194,15 @@ export class QueueConsumerService
         retries: currentAttempt - 1,
         targetWorkerId: payload.targetWorkerId,
         retriedFromJobId: payload.retriedFromJobId,
+        webhookUrl: payload.webhookUrl,
+        idempotencyKey: payload.idempotencyKey,
         error: errorMessage,
-      });
+      } as const;
+      await this.jobStore.saveResult(failedResult);
+      await this.webhookDispatcher.enqueueFromResult(
+        failedResult,
+        payload.webhookSecret,
+      );
       this.channel.sendToQueue(
         routingQueues.deadLetterQueueName,
         Buffer.from(

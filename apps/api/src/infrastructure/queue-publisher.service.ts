@@ -1,7 +1,10 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import amqp, { type Channel, type ChannelModel } from 'amqplib';
 import { getApiRuntimeConfig } from '@repo/config';
-import type { ScrapeJobMessage } from '@repo/queue-contracts';
+import type {
+  ScrapeJobMessage,
+  WebhookDeliveryMessage,
+} from '@repo/queue-contracts';
 import {
   createTargetedDeadLetterQueueName,
   createTargetedQueueName,
@@ -13,6 +16,9 @@ export interface QueueStatsSnapshot {
   consumerCount: number;
   retryMessageCount: number;
   deadLetterMessageCount: number;
+  webhookMessageCount: number;
+  webhookRetryMessageCount: number;
+  webhookDeadLetterMessageCount: number;
 }
 
 @Injectable()
@@ -40,6 +46,17 @@ export class QueuePublisherService implements OnModuleDestroy {
     await channel.assertQueue(config.queue.deadLetterQueueName, {
       durable: true,
     });
+    await channel.assertQueue(config.queue.webhookQueueName, {
+      durable: true,
+    });
+    await channel.assertQueue(config.queue.webhookRetryQueueName, {
+      durable: true,
+      deadLetterExchange: '',
+      deadLetterRoutingKey: config.queue.webhookQueueName,
+    });
+    await channel.assertQueue(config.queue.webhookDeadLetterQueueName, {
+      durable: true,
+    });
 
     this.connection = connection;
     this.channel = channel;
@@ -58,7 +75,10 @@ export class QueuePublisherService implements OnModuleDestroy {
     }
 
     return {
-      queueName: createTargetedQueueName(config.queue.queueName, targetWorkerId),
+      queueName: createTargetedQueueName(
+        config.queue.queueName,
+        targetWorkerId,
+      ),
       retryQueueName: createTargetedRetryQueueName(
         config.queue.queueName,
         targetWorkerId,
@@ -94,11 +114,9 @@ export class QueuePublisherService implements OnModuleDestroy {
       job.targetWorkerId,
     );
 
-    channel.sendToQueue(
-      queues.queueName,
-      Buffer.from(JSON.stringify(job)),
-      { persistent: true },
-    );
+    channel.sendToQueue(queues.queueName, Buffer.from(JSON.stringify(job)), {
+      persistent: true,
+    });
   }
 
   async publishRetry(
@@ -158,10 +176,20 @@ export class QueuePublisherService implements OnModuleDestroy {
   async getQueueStats(): Promise<QueueStatsSnapshot> {
     const channel = await this.getChannel();
     const config = getApiRuntimeConfig();
-    const [state, retryState, deadLetterState] = await Promise.all([
+    const [
+      state,
+      retryState,
+      deadLetterState,
+      webhookState,
+      webhookRetryState,
+      webhookDeadLetterState,
+    ] = await Promise.all([
       channel.checkQueue(config.queue.queueName),
       channel.checkQueue(config.queue.retryQueueName),
       channel.checkQueue(config.queue.deadLetterQueueName),
+      channel.checkQueue(config.queue.webhookQueueName),
+      channel.checkQueue(config.queue.webhookRetryQueueName),
+      channel.checkQueue(config.queue.webhookDeadLetterQueueName),
     ]);
 
     return {
@@ -169,7 +197,21 @@ export class QueuePublisherService implements OnModuleDestroy {
       consumerCount: state.consumerCount,
       retryMessageCount: retryState.messageCount,
       deadLetterMessageCount: deadLetterState.messageCount,
+      webhookMessageCount: webhookState.messageCount,
+      webhookRetryMessageCount: webhookRetryState.messageCount,
+      webhookDeadLetterMessageCount: webhookDeadLetterState.messageCount,
     };
+  }
+
+  async publishWebhook(message: WebhookDeliveryMessage): Promise<void> {
+    const channel = await this.getChannel();
+    const config = getApiRuntimeConfig();
+
+    channel.sendToQueue(
+      config.queue.webhookQueueName,
+      Buffer.from(JSON.stringify(message)),
+      { persistent: true },
+    );
   }
 
   async onModuleDestroy() {

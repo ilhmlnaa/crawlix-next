@@ -5,6 +5,7 @@ import { JobProcessorService } from './job-processor.service';
 import { QueueConsumerService } from './queue-consumer.service';
 import { ScrapeCacheService } from './scrape-cache.service';
 import { WorkerHeartbeatService } from './worker-heartbeat.service';
+import { WebhookDispatcherService } from './webhook-dispatcher.service';
 
 @Module({
   providers: [
@@ -12,9 +13,15 @@ import { WorkerHeartbeatService } from './worker-heartbeat.service';
     JobStoreService,
     ScrapeCacheService,
     WorkerHeartbeatService,
+    WebhookDispatcherService,
     JobProcessorService,
     QueueConsumerService,
   ],
-  exports: [RedisService, JobProcessorService, QueueConsumerService],
+  exports: [
+    RedisService,
+    JobProcessorService,
+    QueueConsumerService,
+    WebhookDispatcherService,
+  ],
 })
 export class JobsModule {}
