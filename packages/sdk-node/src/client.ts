@@ -26,6 +26,9 @@ interface ErrorEnvelope {
     message?: string;
     details?: unknown;
   };
+  code?: string;
+  message?: string | string[];
+  details?: unknown;
 }
 
 interface SuccessEnvelope<T> {
@@ -33,7 +36,12 @@ interface SuccessEnvelope<T> {
   data?: T;
 }
 
-const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled", "timeout"]);
+const TERMINAL_STATUSES = new Set([
+  "completed",
+  "failed",
+  "cancelled",
+  "timeout",
+]);
 
 function stripTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
@@ -62,6 +70,55 @@ function parsePayload<T>(raw: string): T | null {
   } catch {
     return raw as T;
   }
+}
+
+function normalizeErrorMessage(value: unknown): string | undefined {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    const parts = value.filter(
+      (item): item is string => typeof item === "string",
+    );
+    if (parts.length > 0) {
+      return parts.join(", ");
+    }
+  }
+
+  return undefined;
+}
+
+function extractErrorInfo(payload: unknown): {
+  message?: string;
+  code?: string;
+  details?: unknown;
+} {
+  if (!payload) {
+    return {};
+  }
+
+  if (typeof payload === "string") {
+    return {
+      message: payload,
+      details: payload,
+    };
+  }
+
+  if (typeof payload !== "object") {
+    return {};
+  }
+
+  const errorPayload = payload as ErrorEnvelope;
+  const message =
+    normalizeErrorMessage(errorPayload.error?.message) ??
+    normalizeErrorMessage(errorPayload.message);
+
+  return {
+    message,
+    code: errorPayload.error?.code ?? errorPayload.code,
+    details: errorPayload.error?.details ?? errorPayload.details ?? payload,
+  };
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -180,13 +237,14 @@ export class CrawlixClient {
       const payload = parsePayload<SuccessEnvelope<T> | ErrorEnvelope | T>(raw);
 
       if (!response.ok) {
-        const errorPayload = payload as ErrorEnvelope | null;
+        const errorInfo = extractErrorInfo(payload);
         throw new CrawlixHttpError(
-          errorPayload?.error?.message ?? `HTTP request failed with status ${response.status}.`,
+          errorInfo.message ??
+            `HTTP request failed with status ${response.status}.`,
           {
             status: response.status,
-            code: errorPayload?.error?.code,
-            details: errorPayload?.error?.details ?? payload,
+            code: errorInfo.code,
+            details: errorInfo.details,
           },
         );
       }
