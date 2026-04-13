@@ -6,7 +6,7 @@ description: Verify Crawlix webhook signatures in your Node.js application.
 ## Verify a webhook signature
 
 ```ts
-import { verifyWebhookSignature } from '@crawlix/sdk-node';
+import { verifyWebhookSignature } from '@crawlixnext/sdk-node';
 
 const isValid = verifyWebhookSignature({
   secret: process.env.CRAWLIX_WEBHOOK_SECRET!,
@@ -19,7 +19,7 @@ const isValid = verifyWebhookSignature({
 ## Throw on invalid signatures
 
 ```ts
-import { assertWebhookSignature } from '@crawlix/sdk-node';
+import { assertWebhookSignature } from '@crawlixnext/sdk-node';
 
 assertWebhookSignature({
   secret: process.env.CRAWLIX_WEBHOOK_SECRET!,
@@ -32,7 +32,7 @@ assertWebhookSignature({
 ## Parse the event payload
 
 ```ts
-import { parseWebhookEvent } from '@crawlix/sdk-node';
+import { parseWebhookEvent } from '@crawlixnext/sdk-node';
 
 const event = parseWebhookEvent(rawBody);
 

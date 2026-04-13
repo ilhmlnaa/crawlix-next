@@ -1,7 +1,8 @@
 <div align="center">
 
-<img src="https://media1.tenor.com/m/gWFk3_M14rkAAAAd/craft-anime.gif" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
+<img src="https://storage.hamdiv.me/project/crawlix/crawlix-next.png" alt="Crawlix Next" width="480" height="270" style="border-radius: 12px;" />
 
+<!-- https://media1.tenor.com/m/gWFk3_M14rkAAAAd/craft-anime.gif -->
 <p>
   <img src="https://img.shields.io/badge/Next.js-16+-000000?style=flat-square&logo=nextdotjs&logoColor=white" alt="Next.js">
   <img src="https://img.shields.io/badge/NestJS-11+-E0234E?style=flat-square&logo=nestjs&logoColor=white" alt="NestJS">
@@ -259,27 +260,27 @@ For standard local development, use the root `.env` file. The repository already
 
 ### Important environment variables
 
-| Variable                           | Purpose                                            |
-| ---------------------------------- | -------------------------------------------------- |
-| `API_PORT`                         | Dedicated port for the NestJS API                  |
-| `WORKER_PORT`                      | Dedicated port for the NestJS worker               |
-| `DASHBOARD_PORT`                   | Dedicated port for the Next.js dashboard runtime   |
-| `RABBITMQ_URL`                     | RabbitMQ connection string                         |
-| `REDIS_URL`                        | Redis connection string                            |
-| `RABBITMQ_QUEUE_NAME`              | Shared main queue name                             |
-| `RABBITMQ_RETRY_QUEUE_NAME`        | Shared retry queue                                 |
-| `RABBITMQ_DLQ_QUEUE_NAME`          | Shared dead-letter queue                           |
-| `RABBITMQ_WEBHOOK_QUEUE_NAME`      | Main queue for outbound webhook delivery           |
-| `RABBITMQ_WEBHOOK_RETRY_QUEUE_NAME`| Retry queue for webhook redelivery                 |
-| `RABBITMQ_WEBHOOK_DLQ_QUEUE_NAME`  | Dead-letter queue for exhausted webhook attempts   |
-| `WEBHOOK_SIGNING_SECRET`           | HMAC secret used to sign outbound webhook payloads |
-| `WEBHOOK_REQUEST_TIMEOUT_MS`       | Timeout used for webhook HTTP delivery             |
-| `SESSION_SECRET`                   | Cookie session signing secret                      |
-| `DASHBOARD_ADMIN_EMAIL`            | Seeded admin email                                 |
-| `DASHBOARD_ADMIN_PASSWORD`         | Seeded admin password                              |
-| `NEXT_PUBLIC_API_BASE_URL`         | Public API URL used by the dashboard at build time |
-| `SCRAPER_DEFAULT_STRATEGY`         | Default strategy for job creation                  |
-| `PUBLIC_API_RATE_LIMIT_PER_MINUTE` | Public API throttling threshold                    |
+| Variable                            | Purpose                                            |
+| ----------------------------------- | -------------------------------------------------- |
+| `API_PORT`                          | Dedicated port for the NestJS API                  |
+| `WORKER_PORT`                       | Dedicated port for the NestJS worker               |
+| `DASHBOARD_PORT`                    | Dedicated port for the Next.js dashboard runtime   |
+| `RABBITMQ_URL`                      | RabbitMQ connection string                         |
+| `REDIS_URL`                         | Redis connection string                            |
+| `RABBITMQ_QUEUE_NAME`               | Shared main queue name                             |
+| `RABBITMQ_RETRY_QUEUE_NAME`         | Shared retry queue                                 |
+| `RABBITMQ_DLQ_QUEUE_NAME`           | Shared dead-letter queue                           |
+| `RABBITMQ_WEBHOOK_QUEUE_NAME`       | Main queue for outbound webhook delivery           |
+| `RABBITMQ_WEBHOOK_RETRY_QUEUE_NAME` | Retry queue for webhook redelivery                 |
+| `RABBITMQ_WEBHOOK_DLQ_QUEUE_NAME`   | Dead-letter queue for exhausted webhook attempts   |
+| `WEBHOOK_SIGNING_SECRET`            | HMAC secret used to sign outbound webhook payloads |
+| `WEBHOOK_REQUEST_TIMEOUT_MS`        | Timeout used for webhook HTTP delivery             |
+| `SESSION_SECRET`                    | Cookie session signing secret                      |
+| `DASHBOARD_ADMIN_EMAIL`             | Seeded admin email                                 |
+| `DASHBOARD_ADMIN_PASSWORD`          | Seeded admin password                              |
+| `NEXT_PUBLIC_API_BASE_URL`          | Public API URL used by the dashboard at build time |
+| `SCRAPER_DEFAULT_STRATEGY`          | Default strategy for job creation                  |
+| `PUBLIC_API_RATE_LIMIT_PER_MINUTE`  | Public API throttling threshold                    |
 
 ### Per-app environment examples
 

@@ -1,11 +1,11 @@
-# @crawlix/sdk-node
+# @crawlixnext/sdk-node
 
 Node.js SDK for Crawlix Next public API.
 
 ## Install
 
 ```bash
-pnpm add @crawlix/sdk-node
+pnpm add @crawlixnext/sdk-node
 ```
 
 ## Requirements
@@ -17,7 +17,7 @@ pnpm add @crawlix/sdk-node
 ## Quick Start
 
 ```ts
-import { CrawlixClient } from '@crawlix/sdk-node';
+import { CrawlixClient } from '@crawlixnext/sdk-node';
 
 const client = new CrawlixClient({
   baseUrl: 'https://api.example.com/api',
