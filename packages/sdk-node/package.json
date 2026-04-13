@@ -1,0 +1,61 @@
+{
+  "name": "@crawlix/sdk-node",
+  "version": "1.0.0",
+  "private": false,
+  "description": "Official Node.js SDK for the Crawlix Next public async jobs API.",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "homepage": "https://github.com/ilhmlnaa/crawlix-next/tree/main/packages/sdk-node",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ilhmlnaa/crawlix-next.git",
+    "directory": "packages/sdk-node"
+  },
+  "bugs": {
+    "url": "https://github.com/ilhmlnaa/crawlix-next/issues"
+  },
+  "keywords": [
+    "crawlix",
+    "sdk",
+    "nodejs",
+    "scraping",
+    "webhook",
+    "jobs",
+    "api-client"
+  ],
+  "author": "ilhmlnaa",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "test": "pnpm run build && node --test ./tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "eslint": "^9.39.1",
+    "typescript": "5.9.2"
+  }
+}

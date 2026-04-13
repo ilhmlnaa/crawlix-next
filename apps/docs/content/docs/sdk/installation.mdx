@@ -1,0 +1,44 @@
+---
+title: Installation
+description: Install and configure the Node.js SDK.
+---
+
+## Install
+
+```bash
+pnpm add @crawlix/sdk-node
+```
+
+## Requirements
+
+- Node.js 18 or newer
+- Crawlix Next API key
+- Crawlix Next API base URL
+
+## Minimal setup
+
+```ts
+import { CrawlixClient } from '@crawlix/sdk-node';
+
+const client = new CrawlixClient({
+  baseUrl: 'https://api.example.com/api',
+  apiKey: 'cx_xxx',
+});
+```
+
+## Client options
+
+```ts
+type CrawlixClientOptions = {
+  baseUrl: string;
+  apiKey: string;
+  timeoutMs?: number;
+  defaultHeaders?: Record<string, string>;
+};
+```
+
+## Notes
+
+- `baseUrl` should point to the `/api` root of your Crawlix deployment.
+- `apiKey` is sent as `x-api-key`.
+- `defaultHeaders` is useful when you need to attach tenant or correlation metadata to every request.

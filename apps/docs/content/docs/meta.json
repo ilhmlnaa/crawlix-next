@@ -3,6 +3,7 @@
   "pages": [
     "index",
     "api",
+    "sdk",
     "worker",
     "dashboard",
     "deployment"

@@ -1,0 +1,56 @@
+---
+title: Polling Helpers
+description: Wait for jobs safely with built-in polling helpers.
+---
+
+## Wait for terminal status
+
+```ts
+const terminal = await client.waitForCompletion(job.jobId, {
+  intervalMs: 2000,
+  timeoutMs: 60_000,
+});
+```
+
+The helper stops when the job reaches one of these statuses:
+
+- `completed`
+- `failed`
+- `cancelled`
+- `timeout`
+
+## Fetch result automatically when completed
+
+```ts
+const result = await client.waitForCompletion(job.jobId, {
+  intervalMs: 2000,
+  timeoutMs: 60_000,
+  fetchResultOnCompleted: true,
+});
+```
+
+## Create and wait in one step
+
+```ts
+const { job, terminal } = await client.createAndWait(
+  {
+    url: 'https://example.com',
+    strategy: 'auto',
+  },
+  {
+    fetchResultOnCompleted: true,
+  },
+);
+```
+
+## Abort polling
+
+```ts
+const controller = new AbortController();
+
+setTimeout(() => controller.abort(), 5000);
+
+await client.waitForCompletion(job.jobId, {
+  signal: controller.signal,
+});
+```

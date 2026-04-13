@@ -1,0 +1,57 @@
+---
+title: Webhooks
+description: Verify Crawlix webhook signatures in your Node.js application.
+---
+
+## Verify a webhook signature
+
+```ts
+import { verifyWebhookSignature } from '@crawlix/sdk-node';
+
+const isValid = verifyWebhookSignature({
+  secret: process.env.CRAWLIX_WEBHOOK_SECRET!,
+  timestamp: request.headers['x-crawlix-timestamp']!,
+  signature: request.headers['x-crawlix-signature']!,
+  rawBody,
+});
+```
+
+## Throw on invalid signatures
+
+```ts
+import { assertWebhookSignature } from '@crawlix/sdk-node';
+
+assertWebhookSignature({
+  secret: process.env.CRAWLIX_WEBHOOK_SECRET!,
+  timestamp: request.headers['x-crawlix-timestamp']!,
+  signature: request.headers['x-crawlix-signature']!,
+  rawBody,
+});
+```
+
+## Parse the event payload
+
+```ts
+import { parseWebhookEvent } from '@crawlix/sdk-node';
+
+const event = parseWebhookEvent(rawBody);
+
+if (event.event === 'job.completed') {
+  console.log(event.data.jobId);
+}
+```
+
+## Header summary
+
+Webhook requests from Crawlix Next include:
+
+- `x-crawlix-event`
+- `x-crawlix-event-id`
+- `x-crawlix-timestamp`
+- `x-crawlix-signature`
+
+## Notes
+
+- The SDK expects the raw request body, not a re-serialized object.
+- Signature verification uses HMAC SHA-256.
+- Use the same secret configured in Crawlix through `WEBHOOK_SIGNING_SECRET` or the per-job `webhookSecret`.
