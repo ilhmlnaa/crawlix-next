@@ -31,6 +31,10 @@ interface ScraperStrategy {
   ): Promise<ScraperStrategyResult>;
 }
 
+type ScrapeJobOptionsWithProxy = ScrapeJobOptions & {
+  proxyUrl?: string;
+};
+
 export interface BrowserRuntimeStats {
   available: boolean;
   direct: {
@@ -87,7 +91,7 @@ function readTimeout(
 }
 
 function resolveProxyUrl(
-  options: ScrapeJobOptions,
+  options: ScrapeJobOptionsWithProxy,
   config: ScraperRuntimeConfig,
 ): string | undefined {
   if (options.useProxy !== true) {
@@ -108,7 +112,10 @@ class BrowserPoolManager {
   private directBrowser: any | null = null;
   private proxyBrowser: any | null = null;
   private proxyBrowserUrl: string | null = null;
-  private idleTimers = new Map<"direct" | "proxy", NodeJS.Timeout>();
+  private idleTimers = new Map<
+    "direct" | "proxy",
+    ReturnType<typeof setTimeout>
+  >();
   private playwrightAvailable = true;
 
   static getInstance() {
