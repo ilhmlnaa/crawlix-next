@@ -6,10 +6,7 @@ import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { QueuePublisherService } from './../src/infrastructure/queue-publisher.service';
 import { RedisService } from './../src/infrastructure/redis.service';
-import {
-  createWorkerHeartbeatKey,
-  createWorkersIndexKey,
-} from '@repo/shared';
+import { createWorkerHeartbeatKey, createWorkersIndexKey } from '@repo/shared';
 
 class FakeRedisClient {
   private readonly values = new Map<string, string>();
@@ -155,8 +152,7 @@ describe('API auth and jobs flow (e2e)', () => {
       queueName: 'crawlix.scrape.jobs',
       targetedQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567',
       retryQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567.retry',
-      deadLetterQueueName:
-        'crawlix.scrape.jobs.worker.worker-host123-4567.dlq',
+      deadLetterQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567.dlq',
       hostname: 'host123',
       pid: 4567,
       status: 'idle',
@@ -292,7 +288,9 @@ describe('API auth and jobs flow (e2e)', () => {
     const retryResponse = await agent
       .post(`/api/jobs/${targetedEnqueue.body.jobId}/retry`)
       .expect(201);
-    expect(retryResponse.body.retriedFromJobId).toBe(targetedEnqueue.body.jobId);
+    expect(retryResponse.body.retriedFromJobId).toBe(
+      targetedEnqueue.body.jobId,
+    );
     expect(retryResponse.body.targetWorkerId).toBe('worker-host123-4567');
 
     const revokeResponse = await agent

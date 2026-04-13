@@ -1,0 +1,64 @@
+---
+title: Client Usage
+description: Create jobs, target workers, and fetch results through the SDK.
+---
+
+## Create a job
+
+```ts
+import { CrawlixClient } from '@crawlix/sdk-node';
+
+const client = new CrawlixClient({
+  baseUrl: 'https://api.example.com/api',
+  apiKey: 'cx_xxx',
+});
+
+const job = await client.createJob({
+  url: 'https://example.com',
+  strategy: 'auto',
+});
+```
+
+## Create a job with idempotency
+
+```ts
+const job = await client.createJob({
+  url: 'https://example.com',
+  idempotencyKey: 'request-001',
+});
+```
+
+The SDK sends `idempotencyKey` in the request body and also forwards it as the `Idempotency-Key` header.
+
+## Target a specific worker
+
+```ts
+const job = await client.createJob({
+  url: 'https://example.com/protected',
+  strategy: 'playwright',
+  targetWorkerId: 'worker-host123-4567',
+});
+```
+
+## Register a webhook callback
+
+```ts
+const job = await client.createJob({
+  url: 'https://example.com',
+  webhookUrl: 'https://your-app.example/webhooks/crawlix',
+});
+```
+
+## Read job status
+
+```ts
+const record = await client.getJob(job.jobId);
+console.log(record.status, record.progress, record.stage);
+```
+
+## Read final result
+
+```ts
+const result = await client.getJobResult(job.jobId);
+console.log(result.preview);
+```

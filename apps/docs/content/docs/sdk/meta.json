@@ -1,0 +1,13 @@
+{
+  "title": "SDK",
+  "description": "Node.js SDK for Crawlix Next public API",
+  "icon": "Package",
+  "root": true,
+  "pages": [
+    "index",
+    "installation",
+    "client",
+    "polling",
+    "webhooks"
+  ]
+}
