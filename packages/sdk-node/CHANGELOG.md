@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1
+
+- Allowed SDK `baseUrl` to use the deployment origin without requiring a manual `/api` suffix
+- Kept backward compatibility for base URLs that already end with `/api`
+- Updated SDK tests, package README, and Fumadocs examples to reflect the simplified base URL setup
+
 ## 1.0.0
 
 - Initial release of the Crawlix Next Node.js SDK

@@ -23,7 +23,7 @@ test("client builds request with baseUrl and x-api-key", async () => {
   };
 
   const client = new CrawlixClient({
-    baseUrl: "https://api.example.com/api/",
+    baseUrl: "https://api.example.com/",
     apiKey: "cx_test",
   });
 
@@ -31,6 +31,35 @@ test("client builds request with baseUrl and x-api-key", async () => {
 
   assert.equal(calls[0].url, "https://api.example.com/api/jobs");
   assert.equal(calls[0].init.headers["x-api-key"], "cx_test");
+});
+
+test("client keeps backward compatibility when baseUrl already includes /api", async () => {
+  const { CrawlixClient } = await import(distModuleUrl);
+  const calls = [];
+
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, init });
+    return new Response(
+      JSON.stringify({
+        jobId: "job_api_suffix",
+        status: "queued",
+        progress: 0,
+        stage: "queued",
+        queuedAt: "2026-01-01T00:00:00.000Z",
+        resultTtlSeconds: 3600,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  const client = new CrawlixClient({
+    baseUrl: "https://api.example.com/api/",
+    apiKey: "cx_test",
+  });
+
+  await client.createJob({ url: "https://example.com" });
+
+  assert.equal(calls[0].url, "https://api.example.com/api/jobs");
 });
 
 test("client sends idempotency header when provided", async () => {
@@ -53,7 +82,7 @@ test("client sends idempotency header when provided", async () => {
   };
 
   const client = new CrawlixClient({
-    baseUrl: "https://api.example.com/api",
+    baseUrl: "https://api.example.com",
     apiKey: "cx_test",
   });
 
@@ -101,7 +130,7 @@ test("waitForCompletion stops on terminal status", async () => {
     });
 
   const client = new CrawlixClient({
-    baseUrl: "https://api.example.com/api",
+    baseUrl: "https://api.example.com",
     apiKey: "cx_test",
   });
 
@@ -150,7 +179,7 @@ test("waitForCompletion can fetch final result on completion", async () => {
   };
 
   const client = new CrawlixClient({
-    baseUrl: "https://api.example.com/api",
+    baseUrl: "https://api.example.com",
     apiKey: "cx_test",
   });
 
@@ -187,7 +216,7 @@ test("waitForCompletion times out", async () => {
     );
 
   const client = new CrawlixClient({
-    baseUrl: "https://api.example.com/api",
+    baseUrl: "https://api.example.com",
     apiKey: "cx_test",
   });
 

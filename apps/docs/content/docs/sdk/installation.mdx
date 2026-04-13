@@ -21,7 +21,7 @@ pnpm add @crawlixnext/sdk-node
 import { CrawlixClient } from '@crawlixnext/sdk-node';
 
 const client = new CrawlixClient({
-  baseUrl: 'https://api.example.com/api',
+  baseUrl: 'https://api.example.com',
   apiKey: 'cx_xxx',
 });
 ```
@@ -39,6 +39,8 @@ type CrawlixClientOptions = {
 
 ## Notes
 
-- `baseUrl` should point to the `/api` root of your Crawlix deployment.
+- `baseUrl` should point to your Crawlix deployment origin, such as `https://crawlix-next-api.hamdiv.me`.
+- The SDK automatically appends `/api` internally.
+- Base URLs that already end with `/api` remain supported for backward compatibility.
 - `apiKey` is sent as `x-api-key`.
 - `defaultHeaders` is useful when you need to attach tenant or correlation metadata to every request.

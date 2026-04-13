@@ -39,6 +39,15 @@ function stripTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
+function normalizeBaseUrl(baseUrl: string): string {
+  const normalized = stripTrailingSlash(baseUrl.trim());
+  if (normalized.endsWith("/api")) {
+    return normalized;
+  }
+
+  return `${normalized}/api`;
+}
+
 function joinUrl(baseUrl: string, path: string): string {
   return `${stripTrailingSlash(baseUrl)}/${path.replace(/^\/+/, "")}`;
 }
@@ -78,7 +87,7 @@ export class CrawlixClient {
   private readonly defaultHeaders: Record<string, string>;
 
   constructor(options: CrawlixClientOptions) {
-    this.baseUrl = stripTrailingSlash(options.baseUrl);
+    this.baseUrl = normalizeBaseUrl(options.baseUrl);
     this.apiKey = options.apiKey;
     this.timeoutMs = options.timeoutMs ?? 10000;
     this.defaultHeaders = options.defaultHeaders ?? {};

@@ -14,13 +14,15 @@ pnpm add @crawlixnext/sdk-node
 - Crawlix Next API key
 - Crawlix Next API base URL
 
+The SDK accepts your deployment origin, for example `https://crawlix-next-api.hamdiv.me`, and automatically appends `/api` internally. Base URLs that already end with `/api` remain supported for backward compatibility.
+
 ## Quick Start
 
 ```ts
 import { CrawlixClient } from '@crawlixnext/sdk-node';
 
 const client = new CrawlixClient({
-  baseUrl: 'https://api.example.com/api',
+  baseUrl: 'https://api.example.com',
   apiKey: 'cx_xxx',
 });
 
