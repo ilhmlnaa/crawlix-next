@@ -1,5 +1,10 @@
 import os from 'node:os';
-import { Injectable, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { getWorkerRuntimeConfig } from '@repo/config';
 import type { WorkerHeartbeat } from '@repo/queue-contracts';
 import {
@@ -15,6 +20,7 @@ import { RedisService } from '../infrastructure/redis.service';
 export class WorkerHeartbeatService
   implements OnApplicationBootstrap, OnModuleDestroy
 {
+  private readonly logger = new Logger(WorkerHeartbeatService.name);
   private readonly heartbeatTtlSeconds = 30;
   private readonly heartbeatIntervalMs = 10_000;
   private readonly workerId = `${os.hostname()}-${process.pid}`;
@@ -92,6 +98,15 @@ export class WorkerHeartbeatService
 
   async onApplicationBootstrap() {
     await this.writeHeartbeat();
+    this.logger.log(
+      JSON.stringify({
+        event: 'worker.state.changed',
+        workerId: this.workerId,
+        status: this.status,
+        queueName: this.config.queue.queueName,
+        targetedQueueName: this.getTargetedQueues().queueName,
+      }),
+    );
     this.timer = setInterval(() => {
       void this.writeHeartbeat();
     }, this.heartbeatIntervalMs);
@@ -100,6 +115,14 @@ export class WorkerHeartbeatService
   async markProcessing(jobId: string): Promise<void> {
     this.status = 'processing';
     this.currentJobId = jobId;
+    this.logger.log(
+      JSON.stringify({
+        event: 'worker.state.changed',
+        workerId: this.workerId,
+        status: this.status,
+        currentJobId: jobId,
+      }),
+    );
     await this.writeHeartbeat();
   }
 
@@ -113,6 +136,15 @@ export class WorkerHeartbeatService
       this.failedCount += 1;
     }
 
+    this.logger.log(
+      JSON.stringify({
+        event: 'worker.state.changed',
+        workerId: this.workerId,
+        status: this.status,
+        processedCount: this.processedCount,
+        failedCount: this.failedCount,
+      }),
+    );
     await this.writeHeartbeat();
   }
 
@@ -126,5 +158,12 @@ export class WorkerHeartbeatService
     await client.connect().catch(() => undefined);
     await client.del(this.heartbeatKey).catch(() => undefined);
     await client.srem(this.workersIndexKey, this.workerId).catch(() => undefined);
+    this.logger.log(
+      JSON.stringify({
+        event: 'worker.state.changed',
+        workerId: this.workerId,
+        status: 'stopped',
+      }),
+    );
   }
 }

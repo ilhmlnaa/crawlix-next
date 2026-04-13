@@ -15,6 +15,51 @@ import { summarizeContent } from "@repo/shared";
 export interface ScrapeExecutionContext {
   config?: ScraperRuntimeConfig;
   onStageChange?: (stage: ScrapeJobStage, progress: number) => Promise<void> | void;
+  onEvent?: (
+    event:
+      | {
+          type: "strategy_selected";
+          strategy: Exclude<ScrapeStrategy, "auto">;
+          requestedStrategy: ScrapeStrategy;
+        }
+      | {
+          type: "attempt_started";
+          attempt: number;
+          maxRetries: number;
+          strategy: Exclude<ScrapeStrategy, "auto">;
+        }
+      | {
+          type: "strategy_succeeded";
+          attempt: number;
+          strategy: string;
+          method: string;
+          responseTimeMs: number;
+        }
+      | {
+          type: "strategy_failed";
+          attempt: number;
+          strategy: string;
+          method?: string;
+          error?: string;
+        }
+      | {
+          type: "fallback_started";
+          from: "cloudscraper";
+          to: "playwright";
+          attempt: number;
+        }
+      | {
+          type: "retry_scheduled";
+          attempt: number;
+          nextAttempt: number;
+          delayMs: number;
+        }
+      | {
+          type: "stage";
+          stage: ScrapeJobStage;
+          progress: number;
+        },
+  ) => Promise<void> | void;
 }
 
 interface ScraperStrategyResult {
@@ -64,6 +109,7 @@ function readConfig(
   return {
     config: context?.config ?? getWorkerRuntimeConfig().scraper,
     onStageChange: context?.onStageChange ?? (() => undefined),
+    onEvent: context?.onEvent ?? (() => undefined),
   };
 }
 
@@ -250,6 +296,11 @@ async function executeHttpFetch(
   methodLabel: string,
 ): Promise<ScraperStrategyResult> {
   await context.onStageChange("fetching", 15);
+  await context.onEvent({
+    type: "stage",
+    stage: "fetching",
+    progress: 15,
+  });
   const startedAt = Date.now();
   const { options } = job;
   const controller = new AbortController();
@@ -266,6 +317,11 @@ async function executeHttpFetch(
 
     const content = await response.text();
     await context.onStageChange("extracting", 85);
+    await context.onEvent({
+      type: "stage",
+      stage: "extracting",
+      progress: 85,
+    });
 
     if (!response.ok) {
       return {
@@ -314,6 +370,11 @@ class CloudscraperStrategy implements ScraperStrategy {
 
     try {
       await context.onStageChange("fetching", 15);
+      await context.onEvent({
+        type: "stage",
+        stage: "fetching",
+        progress: 15,
+      });
       const cloudscraperModule = await dynamicImport("cloudscraper");
       const cloudscraper = cloudscraperModule.default ?? cloudscraperModule;
       const startedAt = Date.now();
@@ -335,6 +396,11 @@ class CloudscraperStrategy implements ScraperStrategy {
           ? response.body
           : JSON.stringify(response.body);
       await context.onStageChange("extracting", 85);
+      await context.onEvent({
+        type: "stage",
+        stage: "extracting",
+        progress: 85,
+      });
 
       return {
         success: true,
@@ -397,6 +463,11 @@ class PlaywrightStrategy implements ScraperStrategy {
         context.config,
       );
       await context.onStageChange("rendering", 40);
+      await context.onEvent({
+        type: "stage",
+        stage: "rendering",
+        progress: 40,
+      });
       const page = await browser.newPage({
         userAgent: context.config.userAgent,
       });
@@ -410,6 +481,11 @@ class PlaywrightStrategy implements ScraperStrategy {
         });
 
         await context.onStageChange("waiting_selector", 60);
+        await context.onEvent({
+          type: "stage",
+          stage: "waiting_selector",
+          progress: 60,
+        });
         await maybeWaitForSelector(
           page,
           job.options.waitForSelector,
@@ -423,6 +499,11 @@ class PlaywrightStrategy implements ScraperStrategy {
         await maybeWaitAdditionalDelay(page, job.options.additionalDelayMs);
 
         await context.onStageChange("extracting", 85);
+        await context.onEvent({
+          type: "stage",
+          stage: "extracting",
+          progress: 85,
+        });
         const contentType = response?.headers()["content-type"] ?? "text/html";
         const content = contentType.includes("text/html")
           ? await page.content()
@@ -515,25 +596,75 @@ export class ScraperService {
       job.options.maxRetries ?? resolvedContext.config.maxRetries;
     const retryDelayMs =
       job.options.retryDelayMs ?? resolvedContext.config.retryDelayMs;
+    const primaryStrategy =
+      strategy === "auto" ? "cloudscraper" : strategy;
+
+    await resolvedContext.onEvent({
+      type: "strategy_selected",
+      strategy: primaryStrategy,
+      requestedStrategy: job.strategy,
+    });
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
       const currentStrategy = strategy === "auto" ? "cloudscraper" : strategy;
+      await resolvedContext.onEvent({
+        type: "attempt_started",
+        attempt,
+        maxRetries,
+        strategy: currentStrategy,
+      });
       const primary = this.strategies[currentStrategy];
       const execution = await primary.execute(job, resolvedContext);
 
       if (execution.success) {
+        await resolvedContext.onEvent({
+          type: "strategy_succeeded",
+          attempt,
+          strategy: currentStrategy,
+          method: execution.method,
+          responseTimeMs: execution.responseTimeMs,
+        });
         return createSuccessResult(job, execution, attempt);
       }
 
+      await resolvedContext.onEvent({
+        type: "strategy_failed",
+        attempt,
+        strategy: currentStrategy,
+        method: execution.method,
+        error: execution.error,
+      });
+
       if (job.strategy === "auto" && currentStrategy === "cloudscraper") {
+        await resolvedContext.onEvent({
+          type: "fallback_started",
+          from: "cloudscraper",
+          to: "playwright",
+          attempt,
+        });
         const fallbackExecution = await this.strategies.playwright.execute(
           job,
           resolvedContext,
         );
 
         if (fallbackExecution.success) {
+          await resolvedContext.onEvent({
+            type: "strategy_succeeded",
+            attempt,
+            strategy: "playwright",
+            method: fallbackExecution.method,
+            responseTimeMs: fallbackExecution.responseTimeMs,
+          });
           return createSuccessResult(job, fallbackExecution, attempt);
         }
+
+        await resolvedContext.onEvent({
+          type: "strategy_failed",
+          attempt,
+          strategy: "playwright",
+          method: fallbackExecution.method,
+          error: fallbackExecution.error,
+        });
       }
 
       if (attempt === maxRetries) {
@@ -544,6 +675,12 @@ export class ScraperService {
         );
       }
 
+      await resolvedContext.onEvent({
+        type: "retry_scheduled",
+        attempt,
+        nextAttempt: attempt + 1,
+        delayMs: retryDelayMs * Math.pow(2, attempt),
+      });
       await new Promise((resolve) =>
         setTimeout(resolve, retryDelayMs * Math.pow(2, attempt)),
       );

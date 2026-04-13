@@ -1,4 +1,5 @@
 import {
+  Logger,
   Injectable,
   OnApplicationBootstrap,
   OnModuleDestroy,
@@ -29,6 +30,7 @@ import {
 export class QueueConsumerService
   implements OnApplicationBootstrap, OnModuleDestroy
 {
+  private readonly logger = new Logger(QueueConsumerService.name);
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private consuming = false;
@@ -135,9 +137,30 @@ export class QueueConsumerService
       1;
     const routingQueues = this.getRoutingQueues(payload.targetWorkerId);
 
+    this.logger.log(
+      JSON.stringify({
+        event: 'queue.message.received',
+        jobId: payload.jobId,
+        workerId: this.workerHeartbeat.getWorkerId(),
+        targetWorkerId: payload.targetWorkerId ?? null,
+        queueName: message.fields?.routingKey || routingQueues.queueName,
+        attempt: currentAttempt,
+        strategy: payload.strategy,
+      }),
+    );
+
     try {
       await this.processor.process(payload);
       this.channel.ack(message);
+      this.logger.log(
+        JSON.stringify({
+          event: 'queue.message.acked',
+          jobId: payload.jobId,
+          workerId: this.workerHeartbeat.getWorkerId(),
+          targetWorkerId: payload.targetWorkerId ?? null,
+          attempt: currentAttempt,
+        }),
+      );
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown processing error';
@@ -171,6 +194,18 @@ export class QueueConsumerService
           payload.jobId,
           currentAttempt + 1,
           config.queue.maxDeliveryAttempts,
+        );
+        this.logger.warn(
+          JSON.stringify({
+            event: 'queue.message.requeued',
+            jobId: payload.jobId,
+            workerId: this.workerHeartbeat.getWorkerId(),
+            targetWorkerId: payload.targetWorkerId ?? null,
+            attempt: currentAttempt,
+            nextAttempt: currentAttempt + 1,
+            retryQueueName: routingQueues.retryQueueName,
+            error: errorMessage,
+          }),
         );
         return;
       }
@@ -222,6 +257,17 @@ export class QueueConsumerService
       );
       this.channel.ack(message);
       logJobFailure(payload.jobId, currentAttempt, errorMessage);
+      this.logger.error(
+        JSON.stringify({
+          event: 'queue.message.dead_lettered',
+          jobId: payload.jobId,
+          workerId: this.workerHeartbeat.getWorkerId(),
+          targetWorkerId: payload.targetWorkerId ?? null,
+          attempt: currentAttempt,
+          deadLetterQueueName: routingQueues.deadLetterQueueName,
+          error: errorMessage,
+        }),
+      );
     }
   }
 
