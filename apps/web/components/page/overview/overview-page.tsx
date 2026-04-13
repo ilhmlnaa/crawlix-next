@@ -77,8 +77,9 @@ export function OverviewPage() {
   const failed = overview?.statusCounts?.failed ?? 0;
   const queueDepth = overview?.queueDepth ?? 0;
   const consumerCount = overview?.consumerCount ?? 0;
-  const activeWorkers =
-    (overview?.workers ?? []).filter((w) => w.status === "processing").length;
+  const activeWorkers = (overview?.workers ?? []).filter(
+    (w) => w.status === "processing",
+  ).length;
   const totalWorkers = overview?.workers?.length ?? 0;
 
   const systemLoad = useMemo(() => {
@@ -122,10 +123,10 @@ export function OverviewPage() {
   const recentActivity = overview?.recentJobs?.slice(0, 5) ?? [];
 
   return (
-    <div className="space-y-8 pb-10">
+    <div className="w-full min-w-0 space-y-8 pb-10">
       {/* Top Welcome Title */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0">
           <h1 className="text-3xl font-extrabold text-white tracking-tight">
             Crawlix <span className="text-indigo-500">Control Center</span>
           </h1>
@@ -135,7 +136,7 @@ export function OverviewPage() {
             {overview?.queueName || "Cluster Disconnected"}
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={handleRefresh}
             disabled={refreshing}
@@ -155,13 +156,13 @@ export function OverviewPage() {
       </div>
 
       {/* Hero Header */}
-      <div className="relative overflow-hidden rounded-[2rem] border border-indigo-500/20 bg-[#0c1220] p-8 md:p-12 shadow-2xl">
+      <div className="relative w-full overflow-hidden rounded-[2rem] border border-indigo-500/20 bg-[#0c1220] p-6 shadow-2xl md:p-12">
         {/* Abstract Background Element */}
         <div className="absolute -right-24 -top-24 h-96 w-96 rounded-full bg-indigo-500/5 blur-[80px]" />
         <div className="absolute -bottom-24 -left-24 h-96 w-96 rounded-full bg-indigo-600/5 blur-[80px]" />
 
-        <div className="relative z-10 grid gap-10 lg:grid-cols-2 lg:items-center">
-          <div className="space-y-6">
+        <div className="relative z-10 grid gap-8 lg:grid-cols-2 lg:items-center">
+          <div className="min-w-0 space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-4 py-1.5 text-xs font-bold text-indigo-400 uppercase tracking-widest">
               <Activity className="size-3.5" /> Live Optimization
             </div>
@@ -187,7 +188,7 @@ export function OverviewPage() {
             </div>
           </div>
 
-          <div className="hidden lg:block">
+          <div className="hidden min-w-0 lg:block">
             <div className="rounded-2xl border border-[#1a2235] bg-[#070b14]/80 p-6 backdrop-blur-sm shadow-inner">
               <div className="flex items-center justify-between mb-6">
                 <span className="text-sm font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-2">
@@ -244,8 +245,8 @@ export function OverviewPage() {
       {/* Main Grid for Cards and Activity */}
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Stats Column */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="grid gap-5 grid-cols-2">
+        <div className="min-w-0 space-y-8 lg:col-span-2">
+          <div className="grid gap-5 sm:grid-cols-2">
             {[
               {
                 label: "Queue Records",
@@ -282,7 +283,7 @@ export function OverviewPage() {
             ].map(({ label, value, icon: Icon, trend, color, bg }) => (
               <div
                 key={label}
-                className="group relative overflow-hidden rounded-2xl border border-[#1a2235] bg-[#0c1220] p-6 transition-all hover:border-indigo-500/30"
+                className="group relative min-w-0 overflow-hidden rounded-2xl border border-[#1a2235] bg-[#0c1220] p-6 transition-all hover:border-indigo-500/30"
               >
                 <div
                   className={cn(
@@ -392,7 +393,7 @@ export function OverviewPage() {
         </div>
 
         {/* Sidebar Column */}
-        <div className="space-y-8">
+        <div className="min-w-0 space-y-8">
           {/* Quick Actions */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
@@ -404,9 +405,9 @@ export function OverviewPage() {
                   <Link
                     key={href}
                     href={href}
-                    className="group flex items-center justify-between gap-4 rounded-2xl border border-[#1a2235] bg-[#0c1220] p-4 transition-all hover:bg-[#131b2c] hover:border-indigo-500/30"
+                    className="group flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-[#1a2235] bg-[#0c1220] p-4 transition-all hover:border-indigo-500/30 hover:bg-[#131b2c]"
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex min-w-0 items-center gap-4">
                       <div
                         className={cn(
                           "flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110",
@@ -416,7 +417,7 @@ export function OverviewPage() {
                       >
                         <Icon className="size-5" />
                       </div>
-                      <span className="font-bold text-sm text-slate-200">
+                      <span className="min-w-0 truncate font-bold text-sm text-slate-200">
                         {label}
                       </span>
                     </div>
@@ -444,7 +445,7 @@ export function OverviewPage() {
               {recentActivity.map((job) => (
                 <div
                   key={job.jobId}
-                  className="p-4 hover:bg-[#131b2c] transition-colors cursor-pointer group"
+                  className="group cursor-pointer p-4 transition-colors hover:bg-[#131b2c]"
                 >
                   <div className="flex items-center justify-between gap-3 mb-1">
                     <span className="truncate text-xs font-bold text-slate-300 group-hover:text-white transition-colors">

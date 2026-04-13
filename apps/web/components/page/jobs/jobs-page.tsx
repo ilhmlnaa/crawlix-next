@@ -169,11 +169,11 @@ export function JobsPage() {
   };
 
   return (
-    <div className="flex flex-col xl:flex-row gap-6 h-[calc(100vh-140px)] animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="flex min-h-[calc(100dvh-140px)] w-full min-w-0 flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 xl:h-[calc(100vh-140px)] xl:flex-row">
       {/* List Container */}
       <div
         className={cn(
-          "flex flex-col rounded-2xl border border-[#1a2235] bg-[#0c1220] overflow-hidden transition-all duration-300",
+          "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl border border-[#1a2235] bg-[#0c1220] transition-all duration-300",
           selectedJobId ? "xl:w-100 hidden xl:flex" : "flex-1",
         )}
       >
@@ -196,7 +196,7 @@ export function JobsPage() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="min-h-0 flex-1">
           <div className="p-2 space-y-1">
             {jobs.length === 0 && (
               <div className="py-20 text-center text-slate-600">
@@ -253,7 +253,7 @@ export function JobsPage() {
 
       {/* Details Container */}
       {selectedJobId ? (
-        <div className="flex-1 flex flex-col rounded-2xl border border-[#1a2235] bg-[#0c1220] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#1a2235] bg-[#0c1220] shadow-2xl animate-in zoom-in-95 duration-200">
           {/* Mobile Header Back */}
           <div className="xl:hidden p-4 border-b border-[#1a2235]">
             <button
@@ -308,8 +308,8 @@ export function JobsPage() {
             </div>
           </div>
 
-          <ScrollArea className="flex-1">
-            <div className="p-8 space-y-10">
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="min-w-0 space-y-10 p-5 sm:p-8">
               {/* Metadata Section */}
               <section className="space-y-4">
                 <h4 className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-600 flex items-center gap-2">
@@ -391,7 +391,10 @@ export function JobsPage() {
                           <CheckSquare className="size-4" />
                         </button>
                       </div>
-                      <pre className="p-6 rounded-2xl border border-[#1a2235] bg-[#070b14] text-xs font-mono text-slate-400 leading-relaxed overflow-auto max-h-120 whitespace-pre-wrap wrap-break-word">
+                      <pre
+                        className="max-h-120 overflow-auto rounded-2xl border border-[#1a2235] bg-[#070b14] p-6 text-xs font-mono leading-relaxed text-slate-400 whitespace-pre-wrap"
+                        style={{ overflowWrap: "anywhere" }}
+                      >
                         {stringifyPayload(
                           selectedResult.content ?? selectedResult.preview,
                         ) || "Payload buffer is empty."}
@@ -444,14 +447,14 @@ function InfoBox({
   return (
     <div
       className={cn(
-        "p-4 rounded-xl bg-[#121828]/60 border border-[#1a2235]/60 hover:border-indigo-500/20 transition-all",
+        "min-w-0 rounded-xl border border-[#1a2235]/60 bg-[#121828]/60 p-4 transition-all hover:border-indigo-500/20",
         className,
       )}
     >
       <p className="text-[9px] uppercase font-black tracking-[0.15em] text-slate-600 mb-2">
         {label}
       </p>
-      <div className="text-sm font-bold text-slate-200 truncate">{value}</div>
+      <div className="min-w-0 text-sm font-bold text-slate-200">{value}</div>
     </div>
   );
 }

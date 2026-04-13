@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import {
+  Copy,
   ServerCog,
   Cpu,
   Activity,
@@ -9,8 +11,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useDashboardSession } from "@/components/page/dashboard/session-provider";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 function formatRelativeTime(val?: string) {
   if (!val) return "N/A";
@@ -23,12 +27,26 @@ function formatRelativeTime(val?: string) {
 export function WorkersPage() {
   const { overview } = useDashboardSession();
   const workers = overview?.workers ?? [];
+  const [copiedWorkerId, setCopiedWorkerId] = useState<string | null>(null);
+
+  const handleCopyWorkerId = async (workerId: string) => {
+    try {
+      await navigator.clipboard.writeText(workerId);
+      setCopiedWorkerId(workerId);
+      toast.success("Worker ID copied");
+      window.setTimeout(() => {
+        setCopiedWorkerId((current) => (current === workerId ? null : current));
+      }, 1500);
+    } catch {
+      toast.error("Failed to copy worker ID");
+    }
+  };
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full min-w-0 space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div className="space-y-1">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="min-w-0 space-y-1">
           <h1 className="text-2xl font-black text-white tracking-tight uppercase">
             Fleet <span className="text-indigo-500">Surveillance</span>
           </h1>
@@ -36,7 +54,7 @@ export function WorkersPage() {
             Real-time health and task distribution across the cluster.
           </p>
         </div>
-        <div className="flex items-center gap-6 text-xs bg-[#0c1220] border border-[#1a2235] rounded-2xl px-6 py-3 shadow-inner">
+        <div className="flex flex-wrap items-center gap-6 text-xs bg-[#0c1220] border border-[#1a2235] rounded-2xl px-4 py-3 shadow-inner sm:px-6">
           <div className="flex items-center gap-2">
             <div className="size-2 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
             <span className="font-bold text-slate-300">
@@ -66,38 +84,52 @@ export function WorkersPage() {
           {workers.map((worker) => (
             <div
               key={worker.workerId}
-              className="group relative rounded-[2rem] border border-[#1a2235] bg-[#0c1220] p-1 transition-all hover:border-indigo-500/30 hover:shadow-2xl hover:shadow-indigo-500/5"
+              className="group relative min-w-0 rounded-[2rem] border border-[#1a2235] bg-[#0c1220] p-1 transition-all hover:border-indigo-500/30 hover:shadow-2xl hover:shadow-indigo-500/5"
             >
-              <div className="p-6 space-y-6">
+              <div className="space-y-6 p-5 sm:p-6">
                 {/* Top Row */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400">
                       <Cpu className="size-5" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-bold text-white text-base truncate">
+                      <p className="truncate font-bold text-base text-white">
                         {worker.serviceName}
                       </p>
-                      <p className="text-[10px] text-slate-500 font-mono tracking-tighter uppercase">
+                      <p className="break-all text-[10px] font-mono tracking-tighter uppercase text-slate-500">
                         {worker.hostname}
                       </p>
                     </div>
                   </div>
-                  <Badge
-                    className={cn(
-                      "rounded-full border border-transparent px-3 py-1 text-[10px] font-black uppercase tracking-widest",
-                      worker.status === "processing"
-                        ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
-                        : "bg-slate-800 text-slate-500",
-                    )}
-                  >
-                    {worker.status}
-                  </Badge>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      className={cn(
+                        "rounded-full border border-transparent px-3 py-1 text-[10px] font-black uppercase tracking-widest",
+                        worker.status === "processing"
+                          ? "bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                          : "bg-slate-800 text-slate-500",
+                      )}
+                    >
+                      {worker.status}
+                    </Badge>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 rounded-full border border-[#1a2235] bg-[#121828] px-3 text-[10px] font-bold uppercase tracking-widest text-slate-400 hover:bg-[#1a2235] hover:text-white"
+                      onClick={() => handleCopyWorkerId(worker.workerId)}
+                    >
+                      <Copy className="mr-1.5 size-3.5" />
+                      {copiedWorkerId === worker.workerId
+                        ? "Copied"
+                        : "Copy ID"}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Meta Info Grid */}
-                <div className="grid grid-cols-2 gap-px bg-[#1a2235] rounded-2xl overflow-hidden border border-[#1a2235]">
+                <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-[#1a2235] bg-[#1a2235]">
                   <MetaItem
                     icon={Activity}
                     label="Processed"
@@ -125,9 +157,9 @@ export function WorkersPage() {
                       </span>
                     )}
                   </div>
-                  <div className="rounded-2xl border border-[#334155]/30 bg-[#121828] p-4 font-mono text-xs overflow-hidden">
+                  <div className="overflow-hidden rounded-2xl border border-[#334155]/30 bg-[#121828] p-4 font-mono text-xs">
                     {worker.currentJobId ? (
-                      <span className="text-indigo-300 break-all">
+                      <span className="break-all text-indigo-300">
                         {worker.currentJobId}
                       </span>
                     ) : (

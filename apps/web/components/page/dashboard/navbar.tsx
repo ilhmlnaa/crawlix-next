@@ -36,9 +36,9 @@ export function DashboardNavbar() {
   const title = PAGE_TITLES[pathname] ?? "Dashboard";
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-17.5 shrink-0 items-center justify-between gap-4 bg-[#070b14]/80 backdrop-blur-xl px-6 border-b border-[#1a2235]">
-      <div className="flex items-center gap-6">
-        <div className="flex items-baseline gap-2">
+    <header className="sticky top-0 z-30 flex min-h-17.5 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-[#1a2235] bg-[#070b14]/80 px-4 backdrop-blur-xl sm:px-6">
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="flex min-w-0 items-baseline gap-2">
           <h1 className="text-xl font-black text-white tracking-tight uppercase italic decoration-indigo-500/50 underline-offset-4 decoration-2">
             {title}
           </h1>
@@ -52,9 +52,9 @@ export function DashboardNavbar() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         {/* Techy Cluster Badge */}
-        <div className="hidden md:flex items-center gap-4 bg-[#0c1220] border border-[#1a2235] px-4 py-1.5 rounded-xl shadow-inner">
+        <div className="hidden min-w-0 items-center gap-4 rounded-xl border border-[#1a2235] bg-[#0c1220] px-4 py-1.5 shadow-inner md:flex">
           <div className="flex flex-col items-start leading-none">
             <span className="text-[9px] font-black uppercase tracking-widest text-slate-600">
               Active Workers

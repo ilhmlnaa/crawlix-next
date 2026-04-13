@@ -17,11 +17,11 @@ export default function DashboardLayout({
   return (
     <DashboardSessionProvider apiBaseUrl={apiBaseUrl}>
       <AuthGate>
-        <div className="flex xl:h-screen min-h-screen bg-[#070b14] text-slate-300 font-sans selection:bg-indigo-500/30">
+        <div className="flex min-h-screen w-full overflow-x-clip bg-[#070b14] text-slate-300 font-sans selection:bg-indigo-500/30 xl:h-screen">
           <DashboardSidebar />
-          <main className="flex-1 flex flex-col min-w-0 xl:h-screen overflow-y-auto overflow-x-hidden relative">
+          <main className="relative flex min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto xl:h-screen">
             <DashboardNavbar />
-            <div className="flex-1 p-5 pb-24 xl:pb-8 lg:p-10 lg:pt-8 w-full max-w-400 mx-auto animate-in fade-in slide-in-from-bottom-4 duration-400">
+            <div className="mx-auto flex w-full min-w-0 flex-1 max-w-screen-2xl p-4 pb-24 sm:p-6 lg:p-8 xl:pb-8 animate-in fade-in slide-in-from-bottom-4 duration-400">
               {children}
             </div>
           </main>

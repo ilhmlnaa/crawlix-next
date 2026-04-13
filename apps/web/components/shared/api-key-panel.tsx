@@ -69,8 +69,8 @@ export function ApiKeyPanel({
   onDelete: (keyId: string) => void;
 }) {
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col gap-1">
+    <div className="w-full min-w-0 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col gap-1 min-w-0">
         <h2 className="text-2xl font-bold text-white">API Integration Keys</h2>
         <p className="text-sm text-slate-500">
           Secure programmatic access to the Crawlix engine for external
@@ -78,9 +78,9 @@ export function ApiKeyPanel({
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,2.05fr)]">
         <div className="lg:col-span-1">
-          <Card className="border-[#1a2235] bg-[#0c1220] shadow-xl">
+          <Card className="min-w-0 border-[#1a2235] bg-[#0c1220] shadow-xl">
             <CardHeader>
               <CardTitle className="text-lg text-white">
                 Generate New Key
@@ -153,8 +153,8 @@ export function ApiKeyPanel({
           </Card>
         </div>
 
-        <div className="lg:col-span-2">
-          <Card className="border-[#1a2235] bg-[#0c1220] overflow-hidden">
+        <div className="min-w-0 lg:col-span-2">
+          <Card className="min-w-0 overflow-hidden border-[#1a2235] bg-[#0c1220]">
             <CardHeader className="border-b border-[#1a2235]">
               <div className="flex items-center justify-between font-semibold">
                 <span className="text-white">Active Credentials</span>
@@ -164,7 +164,7 @@ export function ApiKeyPanel({
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <ScrollArea className="h-112.5">
+              <ScrollArea className="h-112 max-w-full min-w-0">
                 <Table>
                   <TableHeader className="bg-[#121828]/50">
                     <TableRow className="border-[#1a2235]">
