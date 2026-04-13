@@ -26,7 +26,7 @@ export function DashboardSidebar() {
   return (
     <aside className="w-20 border-r border-[#1a2235] bg-[#0c1220] hidden xl:flex flex-col items-center py-6 gap-8 z-40 relative shrink-0">
       {/* Logo */}
-      <div className="flex h-12 w-12 items-center justify-center rounded-xlshadow-lg">
+      <div className="flex h-12 w-12 items-center justify-center rounded-xl shadow-lg">
         <Image
           src="/logo.png"
           alt="Crawlix Logo"

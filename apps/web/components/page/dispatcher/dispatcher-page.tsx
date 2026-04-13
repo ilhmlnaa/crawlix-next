@@ -87,9 +87,9 @@ export function DispatcherPage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full min-w-0 max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Page Header */}
-      <div className="flex flex-col gap-2">
+      <div className="flex min-w-0 flex-col gap-2">
         <h1 className="text-2xl font-black text-white tracking-tight uppercase italic">
           Command <span className="text-indigo-500">Dispatcher</span>
         </h1>
@@ -101,13 +101,13 @@ export function DispatcherPage() {
 
       <div className="grid gap-8 lg:grid-cols-5">
         {/* Main Dispatcher Control */}
-        <div className="lg:col-span-3 space-y-6">
-          <div className="rounded-3xl border border-[#1a2235] bg-[#0c1220] p-8 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-8 opacity-5">
+        <div className="min-w-0 space-y-6 lg:col-span-3">
+          <div className="relative overflow-hidden rounded-3xl border border-[#1a2235] bg-[#0c1220] p-5 shadow-2xl sm:p-6 lg:p-8">
+            <div className="absolute right-0 top-0 p-8 opacity-5">
               <Terminal className="size-32" />
             </div>
 
-            <div className="space-y-6 relative z-10">
+            <div className="relative z-10 space-y-6">
               <div className="space-y-3">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">
                   Target Resource Locator (URL)
@@ -169,8 +169,8 @@ export function DispatcherPage() {
                 </div>
               </div>
 
-              <details className="rounded-2xl border border-[#1a2235] bg-[#070b14]/60 group">
-                <summary className="list-none cursor-pointer px-4 py-3 flex items-center justify-between">
+              <details className="group rounded-2xl border border-[#1a2235] bg-[#070b14]/60">
+                <summary className="flex list-none cursor-pointer items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-2">
                     <SlidersHorizontal className="size-4 text-indigo-400" />
                     <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
@@ -180,7 +180,7 @@ export function DispatcherPage() {
                   <ChevronDown className="size-4 text-slate-500 transition-transform group-open:rotate-180" />
                 </summary>
 
-                <div className="px-4 pb-4 pt-1 space-y-4 border-t border-[#1a2235]">
+                <div className="space-y-4 border-t border-[#1a2235] px-4 pb-4 pt-1">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <FieldLabel label="Method">
                       <Select
@@ -339,8 +339,8 @@ export function DispatcherPage() {
         </div>
 
         {/* Status / Sidebar */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="rounded-3xl border border-[#1a2235] bg-[#0c1220] p-6 space-y-6 shadow-xl">
+        <div className="min-w-0 space-y-6 lg:col-span-2">
+          <div className="space-y-6 rounded-3xl border border-[#1a2235] bg-[#0c1220] p-5 shadow-xl sm:p-6">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
               Queue Health Check
             </h3>
@@ -368,7 +368,7 @@ export function DispatcherPage() {
             </div>
           </div>
 
-          <div className="rounded-3xl bg-indigo-600 p-8 text-white relative overflow-hidden group shadow-2xl shadow-indigo-600/20">
+          <div className="group relative overflow-hidden rounded-3xl bg-indigo-600 p-6 text-white shadow-2xl shadow-indigo-600/20 sm:p-8">
             <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-125 transition-transform duration-700">
               <Rabbit className="size-32" />
             </div>
@@ -381,7 +381,7 @@ export function DispatcherPage() {
             </p>
             <Link
               href="/keys"
-              className="mt-4 inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest bg-white text-indigo-600 px-4 py-2 rounded-lg"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-indigo-600"
             >
               Manage Access <ArrowRight className="size-3" />
             </Link>
