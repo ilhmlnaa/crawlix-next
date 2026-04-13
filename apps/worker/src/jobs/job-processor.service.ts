@@ -168,7 +168,11 @@ export class JobProcessorService implements OnModuleDestroy {
                   }),
                 );
                 break;
-              case 'fallback_started':
+              case 'fallback_started': {
+                const reason =
+                  'reason' in event && typeof event.reason === 'string'
+                    ? event.reason
+                    : null;
                 this.logger.warn(
                   JSON.stringify({
                     event: 'scraper.strategy.fallback',
@@ -177,9 +181,11 @@ export class JobProcessorService implements OnModuleDestroy {
                     from: event.from,
                     to: event.to,
                     attempt: event.attempt,
+                    reason,
                   }),
                 );
                 break;
+              }
               case 'retry_scheduled':
                 this.logger.warn(
                   JSON.stringify({
@@ -195,6 +201,16 @@ export class JobProcessorService implements OnModuleDestroy {
             }
           },
         }));
+
+      if (
+        job.strategy === 'playwright' &&
+        executionResult.status === 'completed' &&
+        executionResult.method?.includes('http-fallback')
+      ) {
+        throw new Error(
+          'Playwright strict mode: HTTP fallback is disabled for strategy=playwright.',
+        );
+      }
 
       const result = {
         ...executionResult,

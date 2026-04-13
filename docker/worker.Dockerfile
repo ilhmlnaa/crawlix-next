@@ -25,7 +25,7 @@ RUN apk add --no-cache \
     ttf-freefont \
     libstdc++
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
-    PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    PLAYWRIGHT_EXECUTABLE_PATH=/usr/bin/chromium-browser \
     NODE_ENV=production \
     WORKER_PORT=3002
 RUN addgroup -S nodejs && adduser -S nestjs -G nodejs

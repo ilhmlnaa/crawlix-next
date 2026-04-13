@@ -14,7 +14,10 @@ import { summarizeContent } from "@repo/shared";
 
 export interface ScrapeExecutionContext {
   config?: ScraperRuntimeConfig;
-  onStageChange?: (stage: ScrapeJobStage, progress: number) => Promise<void> | void;
+  onStageChange?: (
+    stage: ScrapeJobStage,
+    progress: number,
+  ) => Promise<void> | void;
   onEvent?: (
     event:
       | {
@@ -47,6 +50,7 @@ export interface ScrapeExecutionContext {
           from: "cloudscraper";
           to: "playwright";
           attempt: number;
+          reason?: string;
         }
       | {
           type: "retry_scheduled";
@@ -452,12 +456,12 @@ class PlaywrightStrategy implements ScraperStrategy {
       "specifier",
       "return import(specifier)",
     ) as (specifier: string) => Promise<any>;
+    const startedAt = Date.now();
+    const timeoutMs = readTimeout(job.options, context.config);
+    const proxyUrl = resolveProxyUrl(job.options, context.config);
 
     try {
       const playwright = await dynamicImport("playwright");
-      const startedAt = Date.now();
-      const timeoutMs = readTimeout(job.options, context.config);
-      const proxyUrl = resolveProxyUrl(job.options, context.config);
       const browser = await this.browserPool.getBrowser(
         proxyUrl,
         context.config,
@@ -519,8 +523,18 @@ class PlaywrightStrategy implements ScraperStrategy {
       } finally {
         await page.close().catch(() => undefined);
       }
-    } catch {
-      return executeHttpFetch(job, context, "playwright-http-fallback");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unknown Playwright error";
+
+      return {
+        success: false,
+        content: "",
+        contentType: "text/plain",
+        method: proxyUrl ? "playwright-proxy" : "playwright-direct",
+        responseTimeMs: Date.now() - startedAt,
+        error: `Playwright execution failed: ${message}`,
+      };
     }
   }
 }
@@ -596,8 +610,7 @@ export class ScraperService {
       job.options.maxRetries ?? resolvedContext.config.maxRetries;
     const retryDelayMs =
       job.options.retryDelayMs ?? resolvedContext.config.retryDelayMs;
-    const primaryStrategy =
-      strategy === "auto" ? "cloudscraper" : strategy;
+    const primaryStrategy = strategy === "auto" ? "cloudscraper" : strategy;
 
     await resolvedContext.onEvent({
       type: "strategy_selected",
@@ -641,6 +654,7 @@ export class ScraperService {
           from: "cloudscraper",
           to: "playwright",
           attempt,
+          reason: execution.error ?? "Primary strategy failed",
         });
         const fallbackExecution = await this.strategies.playwright.execute(
           job,
