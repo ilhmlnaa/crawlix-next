@@ -19,11 +19,11 @@ jobs:
 
     strategy:
       matrix:
-        service: [api, worker, docs, web]
+        service: [api, worker]
 
     steps:
       - name: Delete container versions without keep tags
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           OWNER: ${{ github.repository_owner }}
           PACKAGE_NAME: crawlix-next-${{ matrix.service }}
@@ -39,49 +39,44 @@ jobs:
                 .filter(Boolean)
             );
 
-            try {
-              const versions = await github.paginate(
-                "GET /users/{username}/packages/{package_type}/{package_name}/versions",
+            const versions = await github.paginate(
+              "GET /users/{username}/packages/{package_type}/{package_name}/versions",
+              {
+                username: owner,
+                package_type: "container",
+                package_name: packageName,
+                per_page: 100,
+              }
+            );
+
+            core.info(`Found ${versions.length} versions in ${owner}/${packageName}`);
+
+            let kept = 0;
+            let deleted = 0;
+
+            for (const version of versions) {
+              const tags = version.metadata?.container?.tags || [];
+              const hasKeepTag = tags.some((tag) => keepTags.has(tag));
+
+              if (hasKeepTag) {
+                kept += 1;
+                core.info(`KEEP id=${version.id} tags=[${tags.join(", ")}]`);
+                continue;
+              }
+
+              core.info(`DELETE id=${version.id} tags=[${tags.join(", ")}]`);
+
+              await github.request(
+                "DELETE /users/{username}/packages/{package_type}/{package_name}/versions/{package_version_id}",
                 {
                   username: owner,
                   package_type: "container",
                   package_name: packageName,
-                  per_page: 100,
+                  package_version_id: version.id,
                 }
               );
 
-              core.info(`Found ${versions.length} versions in ${owner}/${packageName}`);
-
-              let kept = 0;
-              let deleted = 0;
-
-              for (const version of versions) {
-                const tags = version.metadata?.container?.tags || [];
-                const hasKeepTag = tags.some((tag) => keepTags.has(tag));
-
-                if (hasKeepTag) {
-                  kept += 1;
-                  core.info(`KEEP id=${version.id} tags=[${tags.join(", ")}]`);
-                  continue;
-                }
-
-                core.info(`DELETE id=${version.id} tags=[${tags.join(", ")}]`);
-
-                await github.request(
-                  "DELETE /users/{username}/packages/{package_type}/{package_name}/versions/{package_version_id}",
-                  {
-                    username: owner,
-                    package_type: "container",
-                    package_name: packageName,
-                    package_version_id: version.id,
-                  }
-                );
-
-                deleted += 1;
-              }
-
-              core.notice(`[${packageName}] Cleanup completed: kept=${kept}, deleted=${deleted}`);
-            } catch (error) {
-              core.warning(`[${packageName}] Cleanup skipped - package not found or error occurred`);
-              core.debug(error.message);
+              deleted += 1;
             }
+
+            core.notice(`[${packageName}] Cleanup completed: kept=${kept}, deleted=${deleted}`);
