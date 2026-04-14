@@ -477,30 +477,157 @@ class PlaywrightStrategy implements ScraperStrategy {
       });
 
       try {
+        const method = (job.options.method ?? "GET").toUpperCase();
         const waitUntil = (job.options.waitUntil ??
           "domcontentloaded") as ScrapeWaitUntil;
-        const response = await page.goto(job.url, {
-          timeout: timeoutMs,
-          waitUntil,
-        });
+        if (method === "GET") {
+          const response = await page.goto(job.url, {
+            timeout: timeoutMs,
+            waitUntil,
+          });
 
-        await context.onStageChange("waiting_selector", 60);
+          await context.onStageChange("waiting_selector", 60);
+          await context.onEvent({
+            type: "stage",
+            stage: "waiting_selector",
+            progress: 60,
+          });
+          await maybeWaitForSelector(
+            page,
+            job.options.waitForSelector,
+            timeoutMs,
+          );
+          await maybeWaitForFunction(
+            page,
+            job.options.waitForFunction,
+            timeoutMs,
+          );
+          await maybeWaitAdditionalDelay(page, job.options.additionalDelayMs);
+
+          await context.onStageChange("extracting", 85);
+          await context.onEvent({
+            type: "stage",
+            stage: "extracting",
+            progress: 85,
+          });
+          const contentType =
+            response?.headers()["content-type"] ?? "text/html";
+          const content = contentType.includes("text/html")
+            ? await page.content()
+            : ((await response?.text()) ?? "");
+
+          return {
+            success: true,
+            content,
+            contentType,
+            method: proxyUrl ? "playwright-proxy" : "playwright-direct",
+            responseTimeMs: Date.now() - startedAt,
+          };
+        }
+
+        await context.onStageChange("fetching", 60);
         await context.onEvent({
           type: "stage",
-          stage: "waiting_selector",
+          stage: "fetching",
           progress: 60,
         });
-        await maybeWaitForSelector(
-          page,
-          job.options.waitForSelector,
-          timeoutMs,
+
+        try {
+          const origin = new URL(job.url).origin;
+          await page
+            .goto(origin, {
+              timeout: Math.max(1000, Math.floor(timeoutMs / 2)),
+              waitUntil,
+            })
+            .catch(() => undefined);
+        } catch {
+          // Keep going even when pre-navigation fails; request may still succeed.
+        }
+
+        const requestHeaders = buildHeaders(
+          job.options,
+          context.config,
+        ) as Record<string, string>;
+        const response = await page.evaluate(
+          async (payload: {
+            url: string;
+            method: string;
+            body?: string;
+            formData?: Record<string, string>;
+            headers?: Record<string, string>;
+            timeoutMs: number;
+          }) => {
+            const controller = new AbortController();
+            const timeout = setTimeout(
+              () => controller.abort(),
+              payload.timeoutMs,
+            );
+
+            try {
+              const headers = { ...(payload.headers ?? {}) };
+              let requestBody: string | undefined;
+
+              if (payload.formData) {
+                const params = new URLSearchParams();
+                for (const [key, value] of Object.entries(
+                  payload.formData,
+                ) as Array<[string, string]>) {
+                  params.append(key, value);
+                }
+                requestBody = params.toString();
+                const hasContentType = Object.keys(headers).some(
+                  (headerName) => headerName.toLowerCase() === "content-type",
+                );
+                if (!hasContentType) {
+                  headers["Content-Type"] =
+                    "application/x-www-form-urlencoded; charset=UTF-8";
+                }
+              } else if (payload.body) {
+                requestBody = payload.body;
+              }
+
+              const upstream = await fetch(payload.url, {
+                method: payload.method,
+                headers,
+                body: requestBody,
+                signal: controller.signal,
+              });
+              const content = await upstream.text();
+              const responseHeaders: Record<string, string> = {};
+              upstream.headers.forEach((value, key) => {
+                responseHeaders[key] = value;
+              });
+
+              return {
+                ok: upstream.ok,
+                status: upstream.status,
+                content,
+                contentType: responseHeaders["content-type"] ?? "text/plain",
+              };
+            } catch (error) {
+              return {
+                ok: false,
+                status: 0,
+                content: "",
+                contentType: "text/plain",
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "Playwright request failed",
+              };
+            } finally {
+              clearTimeout(timeout);
+            }
+          },
+          {
+            url: job.url,
+            method,
+            body: job.options.body,
+            formData: job.options.formData,
+            headers: requestHeaders,
+            timeoutMs,
+          },
         );
-        await maybeWaitForFunction(
-          page,
-          job.options.waitForFunction,
-          timeoutMs,
-        );
-        await maybeWaitAdditionalDelay(page, job.options.additionalDelayMs);
 
         await context.onStageChange("extracting", 85);
         await context.onEvent({
@@ -508,15 +635,24 @@ class PlaywrightStrategy implements ScraperStrategy {
           stage: "extracting",
           progress: 85,
         });
-        const contentType = response?.headers()["content-type"] ?? "text/html";
-        const content = contentType.includes("text/html")
-          ? await page.content()
-          : ((await response?.text()) ?? "");
+
+        if (!response.ok) {
+          return {
+            success: false,
+            content: response.content,
+            contentType: response.contentType,
+            method: proxyUrl ? "playwright-proxy" : "playwright-direct",
+            responseTimeMs: Date.now() - startedAt,
+            error:
+              response.error ??
+              `Upstream request failed with status ${response.status}`,
+          };
+        }
 
         return {
           success: true,
-          content,
-          contentType,
+          content: response.content,
+          contentType: response.contentType,
           method: proxyUrl ? "playwright-proxy" : "playwright-direct",
           responseTimeMs: Date.now() - startedAt,
         };
