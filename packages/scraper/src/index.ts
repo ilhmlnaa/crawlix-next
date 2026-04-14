@@ -511,7 +511,7 @@ class PlaywrightStrategy implements ScraperStrategy {
             progress: 85,
           });
           const contentType =
-            response?.headers()["content-type"] ?? "text/html";
+            response?.headers?.()?.["content-type"] ?? "text/html";
           const content = contentType.includes("text/html")
             ? await page.content()
             : ((await response?.text()) ?? "");
