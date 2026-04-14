@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useDashboardSession } from "@/components/page/dashboard/session-provider";
 import { cn } from "@/lib/utils";
+import { HtmlViewer } from "./html-viewer";
 
 function formatRelativeTime(val?: string) {
   if (!val) return "N/A";
@@ -71,6 +72,13 @@ function stringifyPayload(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function isHtmlLike(result: ScrapeJobResult | null): boolean {
+  if (!result) return false;
+  if ((result.contentType ?? "").toLowerCase().includes("html")) return true;
+  const payload = stringifyPayload(result.content ?? result.preview).trim();
+  return payload.startsWith("<") || payload.includes("</");
 }
 
 export function JobsPage() {
@@ -339,6 +347,14 @@ export function JobsPage() {
                     value={selectedJob?.targetWorkerId ?? "Global Cluster"}
                   />
                   <InfoBox
+                    label="Executed On"
+                    value={
+                      selectedResult?.targetWorkerId ??
+                      selectedJob?.targetWorkerId ??
+                      "Pending Dispatch"
+                    }
+                  />
+                  <InfoBox
                     label="Last Latency"
                     value={
                       selectedResult?.responseTimeMs
@@ -387,21 +403,31 @@ export function JobsPage() {
                         {selectedResult.error}
                       </div>
                     )}
-                    <div className="relative group">
-                      <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="p-2 rounded-lg bg-[#1a2235] hover:bg-indigo-600 text-white shadow-xl transition-colors">
-                          <CheckSquare className="size-4" />
-                        </button>
+                    {isHtmlLike(selectedResult) ? (
+                      <HtmlViewer
+                        content={
+                          stringifyPayload(
+                            selectedResult.content ?? selectedResult.preview,
+                          ) || ""
+                        }
+                      />
+                    ) : (
+                      <div className="relative group">
+                        <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button className="p-2 rounded-lg bg-[#1a2235] hover:bg-indigo-600 text-white shadow-xl transition-colors">
+                            <CheckSquare className="size-4" />
+                          </button>
+                        </div>
+                        <pre
+                          className="max-h-120 overflow-auto rounded-2xl border border-[#1a2235] bg-[#070b14] p-6 text-xs font-mono leading-relaxed text-slate-400 whitespace-pre-wrap"
+                          style={{ overflowWrap: "anywhere" }}
+                        >
+                          {stringifyPayload(
+                            selectedResult.content ?? selectedResult.preview,
+                          ) || "Payload buffer is empty."}
+                        </pre>
                       </div>
-                      <pre
-                        className="max-h-120 overflow-auto rounded-2xl border border-[#1a2235] bg-[#070b14] p-6 text-xs font-mono leading-relaxed text-slate-400 whitespace-pre-wrap"
-                        style={{ overflowWrap: "anywhere" }}
-                      >
-                        {stringifyPayload(
-                          selectedResult.content ?? selectedResult.preview,
-                        ) || "Payload buffer is empty."}
-                      </pre>
-                    </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-20 rounded-2xl border border-dashed border-[#1a2235] bg-[#070b14]/50 text-center">

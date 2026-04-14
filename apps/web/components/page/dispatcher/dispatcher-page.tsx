@@ -1,14 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
-  ArrowRight,
-  ChevronDown,
   LoaderCircle,
-  Rabbit,
-  SlidersHorizontal,
   Terminal,
   Globe,
   ShieldCheck,
@@ -28,8 +23,14 @@ import type {
   ScrapeJobOptions,
   ScrapeStrategy,
   ScrapeWaitUntil,
+  ScrapeJobRecord,
+  ScrapeJobResult,
 } from "@repo/queue-contracts";
-import { cn } from "@/lib/utils";
+import { AdvancedOptions } from "./advanced-options";
+import { FormDataTable, type FormDataEntry } from "./form-data-table";
+import { HeadersTable, type HeaderEntry } from "./headers-table";
+import { JsonPreview } from "./json-preview";
+import { ResultDisplay } from "./result-display";
 
 export function DispatcherPage() {
   const { overview, handleCreateJob } = useDashboardSession();
@@ -38,31 +39,57 @@ export function DispatcherPage() {
   const [workerId, setWorkerId] = useState("");
   const [timeoutMs, setTimeoutMs] = useState("30000");
   const [maxRetries, setMaxRetries] = useState("2");
+  const [retryDelayMs, setRetryDelayMs] = useState("1000");
+  const [cacheTtlSeconds, setCacheTtlSeconds] = useState("900");
   const [additionalDelayMs, setAdditionalDelayMs] = useState("");
-  const [waitUntil, setWaitUntil] = useState<ScrapeWaitUntil>("networkidle");
+  const [waitUntil, setWaitUntil] =
+    useState<ScrapeWaitUntil>("domcontentloaded");
   const [waitForSelector, setWaitForSelector] = useState("");
+  const [waitForFunction, setWaitForFunction] = useState("");
   const [method, setMethod] = useState("GET");
   const [useCache, setUseCache] = useState(true);
   const [useProxy, setUseProxy] = useState(false);
   const [proxyUrl, setProxyUrl] = useState("");
+  const [headers, setHeaders] = useState<HeaderEntry[]>([]);
+  const [formData, setFormData] = useState<FormDataEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [lastJobId, setLastJobId] = useState<string | null>(null);
+  const [lastJobResult, setLastJobResult] = useState<ScrapeJobResult | null>(
+    null,
+  );
+  const [loadingResult, setLoadingResult] = useState(false);
+  const [lastJobRecord, setLastJobRecord] = useState<ScrapeJobRecord | null>(
+    null,
+  );
 
   const workers = overview?.workers ?? [];
 
-  const parseOptionalInt = (value: string) => {
-    if (!value.trim()) return undefined;
-    const num = Number(value);
+  const parseOptionalInt = (value: string): number | undefined => {
+    const num = parseInt(value, 10);
     return Number.isFinite(num) ? Math.trunc(num) : undefined;
   };
 
   const buildOptions = (): ScrapeJobOptions => {
+    const headersObj = Object.fromEntries(
+      headers.filter((h) => h.key.trim()).map((h) => [h.key, h.value]),
+    );
+
+    const formDataObj = Object.fromEntries(
+      formData.filter((f) => f.key.trim()).map((f) => [f.key, f.value]),
+    );
+
     const options: ScrapeJobOptions = {
       timeoutMs: parseOptionalInt(timeoutMs),
       maxRetries: parseOptionalInt(maxRetries),
+      retryDelayMs: parseOptionalInt(retryDelayMs),
+      cacheTtlSeconds: parseOptionalInt(cacheTtlSeconds),
       additionalDelayMs: parseOptionalInt(additionalDelayMs),
       waitUntil,
       waitForSelector: waitForSelector.trim() || undefined,
+      waitForFunction: waitForFunction.trim() || undefined,
       method: method.trim() || undefined,
+      headers: Object.keys(headersObj).length > 0 ? headersObj : undefined,
+      formData: Object.keys(formDataObj).length > 0 ? formDataObj : undefined,
       useCache,
       useProxy,
       proxyUrl: proxyUrl.trim() || undefined,
@@ -73,21 +100,80 @@ export function DispatcherPage() {
     ) as ScrapeJobOptions;
   };
 
+  const buildFullPayload = () => ({
+    url,
+    strategy,
+    targetWorkerId: workerId || undefined,
+    options: buildOptions(),
+  });
+
   const onSubmit = async () => {
     if (!url.trim()) return;
+
     setLoading(true);
-    await handleCreateJob(
-      url.trim(),
-      strategy,
-      workerId || undefined,
-      buildOptions(),
-    );
-    setUrl("");
-    setLoading(false);
+    try {
+      const result = await handleCreateJob(
+        url,
+        strategy,
+        workerId || undefined,
+        buildOptions(),
+      );
+      if (result?.jobId) {
+        setLastJobId(result.jobId);
+        setLastJobRecord({
+          jobId: result.jobId,
+          url,
+          strategy,
+          targetWorkerId: workerId || undefined,
+          status: "queued",
+          requestedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        } as ScrapeJobRecord);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
+  // Poll for job result
+  useEffect(() => {
+    if (!lastJobId) {
+      setLastJobResult(null);
+      return;
+    }
+
+    setLoadingResult(true);
+    let cancelled = false;
+
+    const loadResult = async () => {
+      try {
+        const response = await fetch(`/api/jobs/${lastJobId}/result`);
+        if (response.ok) {
+          const data = await response.json();
+          if (!cancelled) {
+            setLastJobResult(data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load result:", err);
+      } finally {
+        if (!cancelled) setLoadingResult(false);
+      }
+    };
+
+    void loadResult();
+    const pollInterval = setInterval(() => {
+      void loadResult();
+    }, 2000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+    };
+  }, [lastJobId]);
+
   return (
-    <div className="w-full min-w-0 max-w-5xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="w-full min-w-0 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
       {/* Page Header */}
       <div className="flex min-w-0 flex-col gap-2">
         <h1 className="text-2xl font-black text-white tracking-tight uppercase italic">
@@ -108,6 +194,7 @@ export function DispatcherPage() {
             </div>
 
             <div className="relative z-10 space-y-6">
+              {/* URL Input */}
               <div className="space-y-3">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400">
                   Target Resource Locator (URL)
@@ -120,6 +207,7 @@ export function DispatcherPage() {
                 />
               </div>
 
+              {/* Strategy & Worker Selection */}
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
@@ -169,125 +257,56 @@ export function DispatcherPage() {
                 </div>
               </div>
 
-              <details className="group rounded-2xl border border-[#1a2235] bg-[#070b14]/60">
-                <summary className="flex list-none cursor-pointer items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <SlidersHorizontal className="size-4 text-indigo-400" />
-                    <span className="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-                      Advanced Configuration
-                    </span>
-                  </div>
-                  <ChevronDown className="size-4 text-slate-500 transition-transform group-open:rotate-180" />
-                </summary>
+              {/* Headers Editor */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  HTTP Headers
+                </label>
+                <HeadersTable data={headers} onChange={setHeaders} />
+              </div>
 
-                <div className="space-y-4 border-t border-[#1a2235] px-4 pb-4 pt-1">
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <FieldLabel label="Method">
-                      <Select
-                        value={method}
-                        onValueChange={(value) => setMethod(value ?? "GET")}
-                      >
-                        <SelectTrigger className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#121828] border-[#1a2235] text-slate-200">
-                          <SelectItem value="GET">GET</SelectItem>
-                          <SelectItem value="POST">POST</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FieldLabel>
-
-                    <FieldLabel label="Wait Until">
-                      <Select
-                        value={waitUntil}
-                        onValueChange={(value) =>
-                          setWaitUntil(value as ScrapeWaitUntil)
-                        }
-                      >
-                        <SelectTrigger className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#121828] border-[#1a2235] text-slate-200">
-                          <SelectItem value="load">load</SelectItem>
-                          <SelectItem value="domcontentloaded">
-                            domcontentloaded
-                          </SelectItem>
-                          <SelectItem value="networkidle">
-                            networkidle
-                          </SelectItem>
-                          <SelectItem value="commit">commit</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FieldLabel>
-
-                    <FieldLabel label="Timeout (ms)">
-                      <Input
-                        value={timeoutMs}
-                        onChange={(e) => setTimeoutMs(e.target.value)}
-                        type="number"
-                        min={1}
-                        placeholder="30000"
-                        className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl"
-                      />
-                    </FieldLabel>
-
-                    <FieldLabel label="Max Retries">
-                      <Input
-                        value={maxRetries}
-                        onChange={(e) => setMaxRetries(e.target.value)}
-                        type="number"
-                        min={0}
-                        placeholder="2"
-                        className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl"
-                      />
-                    </FieldLabel>
-
-                    <FieldLabel label="Additional Delay (ms)">
-                      <Input
-                        value={additionalDelayMs}
-                        onChange={(e) => setAdditionalDelayMs(e.target.value)}
-                        type="number"
-                        min={0}
-                        placeholder="optional"
-                        className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl"
-                      />
-                    </FieldLabel>
-
-                    <FieldLabel label="Wait For Selector">
-                      <Input
-                        value={waitForSelector}
-                        onChange={(e) => setWaitForSelector(e.target.value)}
-                        placeholder="e.g. #main-content"
-                        className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl"
-                      />
-                    </FieldLabel>
-
-                    <FieldLabel label="Proxy URL (Optional)">
-                      <Input
-                        value={proxyUrl}
-                        onChange={(e) => setProxyUrl(e.target.value)}
-                        placeholder="http://ip:port"
-                        disabled={!useProxy}
-                        className="bg-[#121828] border-[#1a2235] text-slate-200 h-11 rounded-xl disabled:opacity-50"
-                      />
-                    </FieldLabel>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <ToggleRow
-                      label="Use Cache"
-                      value={useCache}
-                      onChange={setUseCache}
-                    />
-                    <ToggleRow
-                      label="Use Proxy"
-                      value={useProxy}
-                      onChange={setUseProxy}
-                    />
-                  </div>
+              {/* Form Data Editor (visible for non-GET methods) */}
+              {method.toUpperCase() !== "GET" && (
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                    Form Data Parameters
+                  </label>
+                  <FormDataTable data={formData} onChange={setFormData} />
                 </div>
-              </details>
+              )}
 
+              {/* Advanced Options */}
+              <AdvancedOptions
+                method={method}
+                onMethodChange={setMethod}
+                waitUntil={waitUntil}
+                onWaitUntilChange={setWaitUntil}
+                timeoutMs={timeoutMs}
+                onTimeoutMsChange={setTimeoutMs}
+                maxRetries={maxRetries}
+                onMaxRetriesChange={setMaxRetries}
+                retryDelayMs={retryDelayMs}
+                onRetryDelayMsChange={setRetryDelayMs}
+                cacheTtlSeconds={cacheTtlSeconds}
+                onCacheTtlSecondsChange={setCacheTtlSeconds}
+                additionalDelayMs={additionalDelayMs}
+                onAdditionalDelayMsChange={setAdditionalDelayMs}
+                waitForSelector={waitForSelector}
+                onWaitForSelectorChange={setWaitForSelector}
+                waitForFunction={waitForFunction}
+                onWaitForFunctionChange={setWaitForFunction}
+                proxyUrl={proxyUrl}
+                onProxyUrlChange={setProxyUrl}
+                useCache={useCache}
+                onUseCacheChange={setUseCache}
+                useProxy={useProxy}
+                onUseProxyChange={setUseProxy}
+              />
+
+              {/* JSON Preview */}
+              <JsonPreview data={buildFullPayload()} title="Request Payload" />
+
+              {/* Submit Button */}
               <Button
                 onClick={onSubmit}
                 disabled={loading || !url.trim()}
@@ -319,146 +338,32 @@ export function DispatcherPage() {
               {
                 icon: Activity,
                 label: "Playwright",
-                desc: "Full DOM execution",
+                desc: "Headless browser engine",
               },
-            ].map(({ icon: Icon, label, desc }) => (
+            ].map((item) => (
               <div
-                key={label}
-                className="p-4 rounded-2xl border border-[#1a2235] bg-[#0c1220]/50 hover:bg-[#0c1220] transition-colors"
+                key={item.label}
+                className="p-4 rounded-xl border border-[#1a2235] bg-[#070b14]/50 hover:border-indigo-500/20 transition-colors"
               >
-                <Icon className="size-5 text-indigo-400 mb-2" />
-                <h4 className="text-xs font-bold text-white mb-1 uppercase tracking-wider">
-                  {label}
+                <item.icon className="size-5 text-indigo-400 mb-3" />
+                <h4 className="font-bold text-white text-sm mb-1">
+                  {item.label}
                 </h4>
-                <p className="text-[10px] text-slate-500 leading-tight">
-                  {desc}
-                </p>
+                <p className="text-[12px] text-slate-600">{item.desc}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Status / Sidebar */}
-        <div className="min-w-0 space-y-6 lg:col-span-2">
-          <div className="space-y-6 rounded-3xl border border-[#1a2235] bg-[#0c1220] p-5 shadow-xl sm:p-6">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-              Queue Health Check
-            </h3>
-            <div className="space-y-4">
-              <StatusRow
-                label="Connected Nodes"
-                value={String(workers.length)}
-              />
-              <StatusRow label="Current Latency" value="Stable (14ms)" />
-              <StatusRow label="Cluster Uptime" value="99.98%" />
-              <StatusRow
-                label="Active Workers"
-                value={String(
-                  workers.filter((w) => w.status === "processing").length,
-                )}
-                highlight
-              />
-            </div>
-            <div className="pt-4 border-t border-[#1a2235]">
-              <p className="text-[10px] text-slate-600 leading-relaxed font-mono italic">
-                The dispatcher sends a high-priority message to the AMQP
-                exchange. Targeted workers will acknowledge and perform a
-                synchronous crawl-and-store operation.
-              </p>
-            </div>
-          </div>
-
-          <div className="group relative overflow-hidden rounded-3xl bg-indigo-600 p-6 text-white shadow-2xl shadow-indigo-600/20 sm:p-8">
-            <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:scale-125 transition-transform duration-700">
-              <Rabbit className="size-32" />
-            </div>
-            <h4 className="text-xl font-black mb-2 uppercase tracking-tighter">
-              Enterprise Mode
-            </h4>
-            <p className="text-xs text-indigo-100/80 leading-relaxed">
-              Automate your data pipeline with our programmatic API. Visit the
-              Keys section to generate your token.
-            </p>
-            <Link
-              href="/keys"
-              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-xs font-black uppercase tracking-widest text-indigo-600"
-            >
-              Manage Access <ArrowRight className="size-3" />
-            </Link>
-          </div>
+        {/* Result Display Sidebar */}
+        <div className="min-w-0 lg:col-span-2">
+          <ResultDisplay
+            job={lastJobRecord}
+            result={lastJobResult}
+            loading={loadingResult}
+          />
         </div>
       </div>
     </div>
-  );
-}
-
-function StatusRow({
-  label,
-  value,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs font-medium text-slate-400">{label}</span>
-      <span
-        className={cn(
-          "text-xs font-bold tracking-tight",
-          highlight ? "text-indigo-400" : "text-white",
-        )}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function FieldLabel({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="space-y-2 block">
-      <span className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function ToggleRow({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      className="w-full rounded-xl border border-[#1a2235] bg-[#121828] px-3 py-2 flex items-center justify-between text-left"
-    >
-      <span className="text-[11px] font-semibold text-slate-300">{label}</span>
-      <span
-        className={cn(
-          "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wider",
-          value
-            ? "bg-indigo-500/20 text-indigo-300"
-            : "bg-slate-700/50 text-slate-400",
-        )}
-      >
-        {value ? "On" : "Off"}
-      </span>
-    </button>
   );
 }
