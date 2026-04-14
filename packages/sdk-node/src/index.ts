@@ -14,8 +14,13 @@ export {
   verifyWebhookSignature,
 } from "./webhooks.js";
 export type {
+  AdaptivePollingStep,
   CreateAndWaitResult,
+  CreateAndWaitAdaptiveOptions,
+  CreateAndWaitAdaptiveResult,
+  CreateAndWaitAdaptiveMetrics,
   CreateJobInput,
+  CreateJobOptions,
   CrawlixClientOptions,
   EnqueueJobResponse,
   JobOptions,

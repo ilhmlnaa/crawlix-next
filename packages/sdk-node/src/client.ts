@@ -1,11 +1,16 @@
+import { createHash } from "node:crypto";
 import {
   CrawlixHttpError,
   CrawlixPollingTimeoutError,
   CrawlixTimeoutError,
 } from "./errors.js";
 import type {
+  AdaptivePollingStep,
   CreateAndWaitResult,
+  CreateAndWaitAdaptiveOptions,
+  CreateAndWaitAdaptiveResult,
   CreateJobInput,
+  CreateJobOptions,
   CrawlixClientOptions,
   EnqueueJobResponse,
   JobRecord,
@@ -43,6 +48,14 @@ const TERMINAL_STATUSES = new Set([
   "timeout",
 ]);
 
+const DEFAULT_ADAPTIVE_INTERVALS: AdaptivePollingStep[] = [
+  { afterMs: 0, intervalMs: 120 },
+  { afterMs: 600, intervalMs: 200 },
+  { afterMs: 1500, intervalMs: 300 },
+  { afterMs: 3000, intervalMs: 450 },
+  { afterMs: 6000, intervalMs: 700 },
+];
+
 function stripTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
@@ -70,6 +83,62 @@ function parsePayload<T>(raw: string): T | null {
   } catch {
     return raw as T;
   }
+}
+
+function stableStringifyValue(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringifyValue(item)).join(",")}]`;
+  }
+
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(
+        ([key, nestedValue]) => `"${key}":${stableStringifyValue(nestedValue)}`,
+      );
+
+    return `{${entries.join(",")}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function normalizeAdaptiveIntervals(
+  adaptiveIntervals?: AdaptivePollingStep[],
+): AdaptivePollingStep[] {
+  const source =
+    adaptiveIntervals && adaptiveIntervals.length > 0
+      ? adaptiveIntervals
+      : DEFAULT_ADAPTIVE_INTERVALS;
+
+  return source
+    .map((step) => ({
+      afterMs: Math.max(0, Math.floor(step.afterMs)),
+      intervalMs: Math.max(1, Math.floor(step.intervalMs)),
+    }))
+    .sort((left, right) => left.afterMs - right.afterMs);
+}
+
+function resolveAdaptiveInterval(
+  elapsedMs: number,
+  intervals: AdaptivePollingStep[],
+): number {
+  let resolved = intervals[0]?.intervalMs ?? 2000;
+
+  for (const step of intervals) {
+    if (elapsedMs >= step.afterMs) {
+      resolved = step.intervalMs;
+      continue;
+    }
+
+    break;
+  }
+
+  return resolved;
 }
 
 function normalizeErrorMessage(value: unknown): string | undefined {
@@ -150,10 +219,39 @@ export class CrawlixClient {
     this.defaultHeaders = options.defaultHeaders ?? {};
   }
 
-  async createJob(input: CreateJobInput): Promise<EnqueueJobResponse> {
+  buildIdempotencyKey(
+    input: Omit<CreateJobInput, "idempotencyKey"> | CreateJobInput,
+    namespace = "sdk",
+  ): string {
+    const raw = stableStringifyValue({
+      url: input.url,
+      strategy: input.strategy,
+      options: input.options,
+      targetWorkerId: input.targetWorkerId,
+      webhookUrl: input.webhookUrl,
+    });
+
+    const digest = createHash("sha256").update(raw).digest("hex").slice(0, 32);
+    return `${namespace}-${digest}`;
+  }
+
+  async createJob(
+    input: CreateJobInput,
+    options: CreateJobOptions = {},
+  ): Promise<EnqueueJobResponse> {
+    const idempotencyKey =
+      input.idempotencyKey ??
+      (options.autoIdempotencyKey
+        ? this.buildIdempotencyKey(input, options.idempotencyNamespace ?? "sdk")
+        : undefined);
+    const payload =
+      idempotencyKey && !input.idempotencyKey
+        ? { ...input, idempotencyKey }
+        : input;
+
     return this.request<EnqueueJobResponse>("POST", "/jobs", {
-      body: input,
-      idempotencyKey: input.idempotencyKey,
+      body: payload,
+      idempotencyKey,
     });
   }
 
@@ -169,9 +267,29 @@ export class CrawlixClient {
     jobId: string,
     options: WaitForCompletionOptions = {},
   ): Promise<JobRecord | JobResult> {
+    const result = await this.waitForCompletionInternal(jobId, options);
+    return result.terminal;
+  }
+
+  async waitForCompletionWithMeta(
+    jobId: string,
+    options: WaitForCompletionOptions = {},
+  ): Promise<{ terminal: JobRecord | JobResult; pollCount: number }> {
+    return this.waitForCompletionInternal(jobId, options);
+  }
+
+  private async waitForCompletionInternal(
+    jobId: string,
+    options: WaitForCompletionOptions = {},
+  ): Promise<{ terminal: JobRecord | JobResult; pollCount: number }> {
     const intervalMs = options.intervalMs ?? 2000;
     const timeoutMs = options.timeoutMs ?? 60000;
+    const pollingMode = options.pollingMode ?? "fixed";
+    const adaptiveIntervals = normalizeAdaptiveIntervals(
+      options.adaptiveIntervals,
+    );
     const startedAt = Date.now();
+    let pollCount = 0;
 
     while (true) {
       if (options.signal?.aborted) {
@@ -183,15 +301,22 @@ export class CrawlixClient {
       }
 
       const job = await this.getJob(jobId, options.signal);
+      pollCount += 1;
       if (isTerminalStatus(job.status)) {
         if (job.status === "completed" && options.fetchResultOnCompleted) {
-          return this.getJobResult(jobId, options.signal);
+          const terminal = await this.getJobResult(jobId, options.signal);
+          return { terminal, pollCount };
         }
 
-        return job;
+        return { terminal: job, pollCount };
       }
 
-      await sleep(intervalMs, options.signal);
+      const elapsed = Date.now() - startedAt;
+      const nextIntervalMs =
+        pollingMode === "adaptive"
+          ? resolveAdaptiveInterval(elapsed, adaptiveIntervals)
+          : intervalMs;
+      await sleep(nextIntervalMs, options.signal);
     }
   }
 
@@ -205,6 +330,41 @@ export class CrawlixClient {
     return {
       job,
       terminal,
+    };
+  }
+
+  async createAndWaitAdaptive(
+    input: CreateJobInput,
+    options: CreateAndWaitAdaptiveOptions = {},
+  ): Promise<CreateAndWaitAdaptiveResult> {
+    const startedAt = Date.now();
+    const enqueueStart = Date.now();
+    const job = await this.createJob(input, {
+      autoIdempotencyKey: options.autoIdempotencyKey,
+      idempotencyNamespace: options.idempotencyNamespace,
+    });
+    const enqueueMs = Date.now() - enqueueStart;
+
+    const waitStart = Date.now();
+    const waitResult = await this.waitForCompletionInternal(job.jobId, {
+      fetchResultOnCompleted: options.fetchResultOnCompleted ?? true,
+      timeoutMs: options.timeoutMs ?? 20000,
+      signal: options.signal,
+      pollingMode: options.pollingMode ?? "adaptive",
+      intervalMs: options.intervalMs,
+      adaptiveIntervals: options.adaptiveIntervals,
+    });
+    const waitMs = Date.now() - waitStart;
+
+    return {
+      job,
+      terminal: waitResult.terminal,
+      metrics: {
+        enqueueMs,
+        waitMs,
+        totalMs: Date.now() - startedAt,
+        pollCount: waitResult.pollCount,
+      },
     };
   }
 

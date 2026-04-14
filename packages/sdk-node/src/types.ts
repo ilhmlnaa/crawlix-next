@@ -116,6 +116,34 @@ export interface WaitForCompletionOptions {
   timeoutMs?: number;
   signal?: AbortSignal;
   fetchResultOnCompleted?: boolean;
+  pollingMode?: "fixed" | "adaptive";
+  adaptiveIntervals?: AdaptivePollingStep[];
+}
+
+export interface AdaptivePollingStep {
+  afterMs: number;
+  intervalMs: number;
+}
+
+export interface CreateJobOptions {
+  autoIdempotencyKey?: boolean;
+  idempotencyNamespace?: string;
+}
+
+export interface CreateAndWaitAdaptiveOptions extends WaitForCompletionOptions {
+  autoIdempotencyKey?: boolean;
+  idempotencyNamespace?: string;
+}
+
+export interface CreateAndWaitAdaptiveMetrics {
+  enqueueMs: number;
+  waitMs: number;
+  totalMs: number;
+  pollCount: number;
+}
+
+export interface CreateAndWaitAdaptiveResult extends CreateAndWaitResult {
+  metrics: CreateAndWaitAdaptiveMetrics;
 }
 
 export interface CreateAndWaitResult {

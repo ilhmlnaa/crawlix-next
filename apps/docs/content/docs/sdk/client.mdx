@@ -6,16 +6,16 @@ description: Create jobs, target workers, and fetch results through the SDK.
 ## Create a job
 
 ```ts
-import { CrawlixClient } from '@crawlixnext/sdk-node';
+import { CrawlixClient } from "@crawlixnext/sdk-node";
 
 const client = new CrawlixClient({
-  baseUrl: 'https://api.example.com',
-  apiKey: 'cx_xxx',
+  baseUrl: "https://api.example.com",
+  apiKey: "cx_xxx",
 });
 
 const job = await client.createJob({
-  url: 'https://example.com',
-  strategy: 'auto',
+  url: "https://example.com",
+  strategy: "auto",
 });
 ```
 
@@ -23,20 +23,35 @@ const job = await client.createJob({
 
 ```ts
 const job = await client.createJob({
-  url: 'https://example.com',
-  idempotencyKey: 'request-001',
+  url: "https://example.com",
+  idempotencyKey: "request-001",
 });
 ```
 
 The SDK sends `idempotencyKey` in the request body and also forwards it as the `Idempotency-Key` header.
 
+## Create a job with automatic idempotency key
+
+```ts
+const job = await client.createJob(
+  {
+    url: "https://example.com",
+    strategy: "cloudscraper",
+  },
+  {
+    autoIdempotencyKey: true,
+    idempotencyNamespace: "sdk-adaptive",
+  },
+);
+```
+
 ## Target a specific worker
 
 ```ts
 const job = await client.createJob({
-  url: 'https://example.com/protected',
-  strategy: 'playwright',
-  targetWorkerId: 'worker-host123-4567',
+  url: "https://example.com/protected",
+  strategy: "playwright",
+  targetWorkerId: "worker-host123-4567",
 });
 ```
 
@@ -44,8 +59,8 @@ const job = await client.createJob({
 
 ```ts
 const job = await client.createJob({
-  url: 'https://example.com',
-  webhookUrl: 'https://your-app.example/webhooks/crawlix',
+  url: "https://example.com",
+  webhookUrl: "https://your-app.example/webhooks/crawlix",
 });
 ```
 

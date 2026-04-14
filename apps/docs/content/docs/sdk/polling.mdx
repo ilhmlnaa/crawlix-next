@@ -19,6 +19,18 @@ The helper stops when the job reaches one of these statuses:
 - `cancelled`
 - `timeout`
 
+## Use adaptive polling for lower latency
+
+```ts
+const result = await client.waitForCompletion(job.jobId, {
+  pollingMode: "adaptive",
+  fetchResultOnCompleted: true,
+  timeoutMs: 20_000,
+});
+```
+
+`pollingMode: 'adaptive'` starts with short intervals, then backs off gradually to reduce API load.
+
 ## Fetch result automatically when completed
 
 ```ts
@@ -34,12 +46,35 @@ const result = await client.waitForCompletion(job.jobId, {
 ```ts
 const { job, terminal } = await client.createAndWait(
   {
-    url: 'https://example.com',
-    strategy: 'auto',
+    url: "https://example.com",
+    strategy: "auto",
   },
   {
     fetchResultOnCompleted: true,
   },
+);
+```
+
+## Create and wait with adaptive defaults and metrics
+
+```ts
+const { job, terminal, metrics } = await client.createAndWaitAdaptive(
+  {
+    url: "https://example.com",
+    strategy: "cloudscraper",
+  },
+  {
+    autoIdempotencyKey: true,
+    idempotencyNamespace: "sdk-adaptive",
+    timeoutMs: 20_000,
+  },
+);
+
+console.log(
+  metrics.enqueueMs,
+  metrics.waitMs,
+  metrics.totalMs,
+  metrics.pollCount,
 );
 ```
 

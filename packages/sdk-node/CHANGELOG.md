@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.0.3
+
+- Renamed `createAndWaitFast` to `createAndWaitAdaptive` before public adoption
+- Kept adaptive polling, metrics, and auto idempotency key generation features
+
+## 1.0.2
+
+- Added optional adaptive polling mode via `waitForCompletion(..., { pollingMode: 'adaptive' })`
+- Added `createAndWaitAdaptive` helper with low-latency defaults and polling metrics
+- Added optional auto idempotency key generation for `createJob` and `createAndWaitAdaptive`
+- Kept backward compatibility: existing `createJob`, `waitForCompletion`, and `createAndWait` behavior remains unchanged by default
+
 ## 1.0.1
 
 - Allowed SDK `baseUrl` to use the deployment origin without requiring a manual `/api` suffix

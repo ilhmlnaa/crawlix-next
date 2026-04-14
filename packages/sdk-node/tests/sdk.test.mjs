@@ -94,6 +94,55 @@ test("client sends idempotency header when provided", async () => {
   assert.equal(recordedHeaders["Idempotency-Key"], "request-123");
 });
 
+test("client can auto-generate idempotency key", async () => {
+  const { CrawlixClient } = await import(distModuleUrl);
+  let recordedHeaders = null;
+  let recordedBody = null;
+
+  globalThis.fetch = async (_url, init) => {
+    recordedHeaders = init.headers;
+    recordedBody = JSON.parse(init.body);
+    return new Response(
+      JSON.stringify({
+        jobId: "job_auto_idempotency",
+        status: "queued",
+        progress: 0,
+        stage: "queued",
+        queuedAt: "2026-01-01T00:00:00.000Z",
+        resultTtlSeconds: 3600,
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  const client = new CrawlixClient({
+    baseUrl: "https://api.example.com",
+    apiKey: "cx_test",
+  });
+
+  await client.createJob(
+    {
+      url: "https://example.com",
+      strategy: "cloudscraper",
+      options: {
+        timeoutMs: 5000,
+        useCache: true,
+      },
+    },
+    {
+      autoIdempotencyKey: true,
+      idempotencyNamespace: "sdk-fast",
+    },
+  );
+
+  assert.equal(typeof recordedHeaders["Idempotency-Key"], "string");
+  assert.equal(
+    recordedHeaders["Idempotency-Key"].startsWith("sdk-fast-"),
+    true,
+  );
+  assert.equal(recordedBody.idempotencyKey, recordedHeaders["Idempotency-Key"]);
+});
+
 test("waitForCompletion stops on terminal status", async () => {
   const { CrawlixClient } = await import(distModuleUrl);
   const responses = [
@@ -193,10 +242,9 @@ test("waitForCompletion can fetch final result on completion", async () => {
 });
 
 test("waitForCompletion times out", async () => {
-  const {
-    CrawlixClient,
-    CrawlixPollingTimeoutError,
-  } = await import(distModuleUrl);
+  const { CrawlixClient, CrawlixPollingTimeoutError } = await import(
+    distModuleUrl
+  );
 
   globalThis.fetch = async () =>
     new Response(
@@ -230,11 +278,95 @@ test("waitForCompletion times out", async () => {
   );
 });
 
+test("createAndWaitAdaptive returns terminal result and metrics", async () => {
+  const { CrawlixClient } = await import(distModuleUrl);
+  let statusChecks = 0;
+
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+
+    if (href.endsWith("/jobs")) {
+      return new Response(
+        JSON.stringify({
+          jobId: "job_fast_1",
+          status: "queued",
+          progress: 0,
+          stage: "queued",
+          queuedAt: "2026-01-01T00:00:00.000Z",
+          resultTtlSeconds: 3600,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (href.endsWith("/jobs/job_fast_1")) {
+      statusChecks += 1;
+      const status = statusChecks >= 2 ? "completed" : "processing";
+
+      return new Response(
+        JSON.stringify({
+          jobId: "job_fast_1",
+          status,
+          progress: status === "completed" ? 100 : 20,
+          stage: status === "completed" ? "completed" : "fetching",
+          url: "https://example.com",
+          strategy: "cloudscraper",
+          requestedAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:01.000Z",
+          fingerprint: "abc",
+          options: {},
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (href.endsWith("/jobs/job_fast_1/result")) {
+      return new Response(
+        JSON.stringify({
+          jobId: "job_fast_1",
+          status: "completed",
+          progress: 100,
+          stage: "completed",
+          url: "https://example.com",
+          strategy: "cloudscraper",
+          requestedAt: "2026-01-01T00:00:00.000Z",
+          completedAt: "2026-01-01T00:00:02.000Z",
+          preview: "ok",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    throw new Error(`Unexpected URL: ${href}`);
+  };
+
+  const client = new CrawlixClient({
+    baseUrl: "https://api.example.com",
+    apiKey: "cx_test",
+  });
+
+  const result = await client.createAndWaitAdaptive(
+    {
+      url: "https://example.com",
+      strategy: "cloudscraper",
+    },
+    {
+      adaptiveIntervals: [{ afterMs: 0, intervalMs: 1 }],
+      timeoutMs: 5000,
+      autoIdempotencyKey: true,
+      idempotencyNamespace: "sdk-fast",
+    },
+  );
+
+  assert.equal(result.terminal.status, "completed");
+  assert.equal(result.metrics.pollCount >= 2, true);
+  assert.equal(result.metrics.totalMs >= 0, true);
+});
+
 test("webhook signature verification works", async () => {
-  const {
-    createWebhookSignature,
-    verifyWebhookSignature,
-  } = await import(distModuleUrl);
+  const { createWebhookSignature, verifyWebhookSignature } = await import(
+    distModuleUrl
+  );
 
   const rawBody = JSON.stringify({
     event: "job.completed",

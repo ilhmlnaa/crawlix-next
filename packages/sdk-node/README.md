@@ -19,16 +19,16 @@ The SDK accepts your deployment origin, for example `https://crawlix-next-api.ha
 ## Quick Start
 
 ```ts
-import { CrawlixClient } from '@crawlixnext/sdk-node';
+import { CrawlixClient } from "@crawlixnext/sdk-node";
 
 const client = new CrawlixClient({
-  baseUrl: 'https://api.example.com',
-  apiKey: 'cx_xxx',
+  baseUrl: "https://api.example.com",
+  apiKey: "cx_xxx",
 });
 
 const job = await client.createJob({
-  url: 'https://example.com',
-  strategy: 'auto',
+  url: "https://example.com",
+  strategy: "auto",
 });
 
 const result = await client.waitForCompletion(job.jobId, {
@@ -36,10 +36,46 @@ const result = await client.waitForCompletion(job.jobId, {
 });
 ```
 
+## Faster Completion Polling
+
+For low-latency workloads (for example static pages with `cloudscraper`), use adaptive polling:
+
+```ts
+const { job, terminal, metrics } = await client.createAndWaitAdaptive(
+  {
+    url: "https://example.com",
+    strategy: "cloudscraper",
+  },
+  {
+    autoIdempotencyKey: true,
+    idempotencyNamespace: "sdk-fast",
+    pollingMode: "adaptive",
+    timeoutMs: 20000,
+  },
+);
+
+console.log(job.jobId, terminal.status, metrics);
+```
+
+If you want to keep using `waitForCompletion`, you can still switch polling mode:
+
+```ts
+const result = await client.waitForCompletion(job.jobId, {
+  pollingMode: "adaptive",
+  fetchResultOnCompleted: true,
+});
+```
+
+Backward compatibility note:
+
+- Existing calls keep the same behavior by default (`pollingMode: 'fixed'`, `intervalMs: 2000`).
+- New options are additive and optional.
+
 ## Features
 
 - API key authenticated client
 - async job creation and polling
+- adaptive polling and adaptive create-and-wait helper
 - targeted worker dispatch support
 - idempotent job creation support
 - webhook signature verification helpers
