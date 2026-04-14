@@ -1,8 +1,12 @@
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { z } from 'zod';
 
-export class CreateApiKeyDto {
-  @IsString()
-  @MinLength(3)
-  @MaxLength(50)
-  label!: string;
-}
+export const CreateApiKeyDtoSchema = z
+  .object({
+    label: z
+      .string()
+      .min(3, 'Label must be at least 3 characters')
+      .max(50, 'Label must be at most 50 characters'),
+  })
+  .strict();
+
+export type CreateApiKeyDto = z.infer<typeof CreateApiKeyDtoSchema>;

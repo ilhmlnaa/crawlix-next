@@ -1,10 +1,10 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { z } from 'zod';
 
-export class LoginDto {
-  @IsEmail()
-  email!: string;
+export const LoginDtoSchema = z
+  .object({
+    email: z.email('Invalid email address'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+  })
+  .strict();
 
-  @IsString()
-  @MinLength(8)
-  password!: string;
-}
+export type LoginDto = z.infer<typeof LoginDtoSchema>;

@@ -9,7 +9,9 @@ import {
 } from '@nestjs/common';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { AdminService } from './admin.service';
-import { CreateApiKeyDto } from './dto/create-api-key.dto';
+import { CreateApiKeyDtoSchema } from './dto/create-api-key.dto';
+import type { CreateApiKeyDto } from './dto/create-api-key.dto';
+import { ZodBody } from '../common/decorators';
 
 @Controller('admin/api-keys')
 @UseGuards(SessionAuthGuard)
@@ -22,7 +24,7 @@ export class AdminController {
   }
 
   @Post()
-  create(@Body() body: CreateApiKeyDto) {
+  create(@ZodBody(CreateApiKeyDtoSchema) body: CreateApiKeyDto) {
     return this.adminService.createApiKey(body.label);
   }
 

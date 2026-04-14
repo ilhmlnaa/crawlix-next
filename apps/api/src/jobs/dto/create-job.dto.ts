@@ -1,114 +1,73 @@
-import {
-  IsBoolean,
-  IsIn,
-  IsInt,
-  IsObject,
-  IsOptional,
-  IsString,
-  IsUrl,
-  Min,
-  ValidateNested,
-} from 'class-validator';
-import { Type } from 'class-transformer';
+import { z } from 'zod';
 import type {
   ScrapeJobOptions,
   ScrapeStrategy,
   ScrapeWaitUntil,
 } from '@repo/queue-contracts';
 
-class CreateJobOptionsDto implements ScrapeJobOptions {
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  timeoutMs?: number;
+const ScrapeStrategySchema: z.ZodType<ScrapeStrategy> = z.enum([
+  'cloudscraper',
+  'playwright',
+  'auto',
+]);
 
-  @IsOptional()
-  @IsString()
-  method?: string;
+const ScrapeWaitUntilSchema: z.ZodType<ScrapeWaitUntil> = z.enum([
+  'load',
+  'domcontentloaded',
+  'networkidle',
+  'commit',
+]);
 
-  @IsOptional()
-  @IsString()
-  body?: string;
+const CreateJobOptionsDtoSchema: z.ZodType<ScrapeJobOptions> = z
+  .object({
+    timeoutMs: z
+      .number()
+      .int()
+      .min(1, 'Timeout must be at least 1ms')
+      .optional(),
+    method: z.string().optional(),
+    body: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
+    formData: z.record(z.string(), z.string()).optional(),
+    useCache: z.boolean().optional(),
+    cacheTtlSeconds: z
+      .number()
+      .int()
+      .min(1, 'Cache TTL must be at least 1 second')
+      .optional(),
+    maxRetries: z
+      .number()
+      .int()
+      .min(0, 'Max retries must be at least 0')
+      .optional(),
+    retryDelayMs: z
+      .number()
+      .int()
+      .min(0, 'Retry delay must be at least 0ms')
+      .optional(),
+    waitUntil: ScrapeWaitUntilSchema.optional(),
+    waitForSelector: z.string().optional(),
+    waitForFunction: z.string().optional(),
+    additionalDelayMs: z
+      .number()
+      .int()
+      .min(0, 'Additional delay must be at least 0ms')
+      .optional(),
+    useProxy: z.boolean().optional(),
+    proxyUrl: z.string().url('Invalid proxy URL').optional(),
+  })
+  .strict();
 
-  @IsOptional()
-  @IsObject()
-  headers?: Record<string, string>;
+export const CreateJobDtoSchema = z
+  .object({
+    url: z.string().url('Invalid URL'),
+    strategy: ScrapeStrategySchema.optional(),
+    options: CreateJobOptionsDtoSchema.optional(),
+    targetWorkerId: z.string().optional(),
+    webhookUrl: z.string().url('Invalid webhook URL').optional(),
+    webhookSecret: z.string().optional(),
+    idempotencyKey: z.string().optional(),
+  })
+  .strict();
 
-  @IsOptional()
-  @IsObject()
-  formData?: Record<string, string>;
-
-  @IsOptional()
-  @IsBoolean()
-  useCache?: boolean;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  cacheTtlSeconds?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  maxRetries?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  retryDelayMs?: number;
-
-  @IsOptional()
-  @IsIn(['load', 'domcontentloaded', 'networkidle', 'commit'])
-  waitUntil?: ScrapeWaitUntil;
-
-  @IsOptional()
-  @IsString()
-  waitForSelector?: string;
-
-  @IsOptional()
-  @IsString()
-  waitForFunction?: string;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  additionalDelayMs?: number;
-
-  @IsOptional()
-  @IsBoolean()
-  useProxy?: boolean;
-
-  @IsOptional()
-  @IsUrl()
-  proxyUrl?: string;
-}
-
-export class CreateJobDto {
-  @IsUrl()
-  url!: string;
-
-  @IsOptional()
-  @IsIn(['cloudscraper', 'playwright', 'auto'])
-  strategy?: ScrapeStrategy;
-
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => CreateJobOptionsDto)
-  options?: CreateJobOptionsDto;
-
-  @IsOptional()
-  @IsString()
-  targetWorkerId?: string;
-
-  @IsOptional()
-  @IsUrl()
-  webhookUrl?: string;
-
-  @IsOptional()
-  @IsString()
-  webhookSecret?: string;
-
-  @IsOptional()
-  @IsString()
-  idempotencyKey?: string;
-}
+export type CreateJobDto = z.infer<typeof CreateJobDtoSchema>;

@@ -1,4 +1,3 @@
-import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { getApiRuntimeConfig, validateApiRuntimeConfig } from '@repo/config';
 import cookieParser from 'cookie-parser';
@@ -20,33 +19,30 @@ async function bootstrap() {
     ),
   );
 
+  const corsOrigin =
+    config.corsOrigin === '*'
+      ? true
+      : (
+          origin: string | undefined,
+          callback: (error: Error | null, allow?: boolean) => void,
+        ): void => {
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+            return;
+          }
+
+          callback(new Error(`Origin ${origin} is not allowed by CORS`));
+        };
+
   app.enableShutdownHooks();
   app.useGlobalInterceptors(new RequestLoggingInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
   app.enableCors({
-    origin:
-      config.corsOrigin === '*'
-        ? true
-        : (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin)) {
-              callback(null, true);
-              return;
-            }
-
-            callback(new Error(`Origin ${origin} is not allowed by CORS`));
-          },
+    origin: corsOrigin,
     credentials: true,
   });
   app.setGlobalPrefix('api');
   app.use(cookieParser());
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      forbidUnknownValues: true,
-      transform: true,
-    }),
-  );
 
   logBootstrapSummary(config);
 

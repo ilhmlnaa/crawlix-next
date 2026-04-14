@@ -9,8 +9,10 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
-import { LoginDto } from './dto/login.dto';
+import { LoginDtoSchema } from './dto/login.dto';
+import type { LoginDto } from './dto/login.dto';
 import { SessionAuthGuard } from './guards/session-auth.guard';
+import { ZodBody } from '../common/decorators';
 
 @Controller('auth')
 export class AuthController {
@@ -18,10 +20,13 @@ export class AuthController {
 
   @Post('login')
   async login(
-    @Body() body: LoginDto,
+    @ZodBody(LoginDtoSchema) body: LoginDto,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const authenticated = await this.authService.login(body.email, body.password);
+    const authenticated = await this.authService.login(
+      body.email,
+      body.password,
+    );
 
     response.cookie(
       this.authService.getCookieName(),

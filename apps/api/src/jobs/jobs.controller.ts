@@ -10,7 +10,9 @@ import {
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
 import { SessionOrApiKeyGuard } from '../auth/guards/session-or-api-key.guard';
 import { JobsService } from './jobs.service';
-import { CreateJobDto } from './dto/create-job.dto';
+import { CreateJobDtoSchema } from './dto/create-job.dto';
+import type { CreateJobDto } from './dto/create-job.dto';
+import { ZodBody } from '../common/decorators';
 
 @Controller('jobs')
 export class JobsController {
@@ -19,7 +21,7 @@ export class JobsController {
   @Post()
   @UseGuards(SessionOrApiKeyGuard)
   enqueue(
-    @Body() body: CreateJobDto,
+    @ZodBody(CreateJobDtoSchema) body: CreateJobDto,
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.jobsService.enqueue({
