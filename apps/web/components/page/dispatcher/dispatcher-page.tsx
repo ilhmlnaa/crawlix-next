@@ -107,6 +107,161 @@ export function DispatcherPage() {
     options: buildOptions(),
   });
 
+  const applyPayloadFromJson = (payload: unknown): string | undefined => {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return "Payload harus object JSON dengan format { url, strategy, targetWorkerId, options }";
+    }
+
+    const root = payload as Record<string, unknown>;
+
+    if (typeof root.url !== "string" || !root.url.trim()) {
+      return "Field `url` wajib string dan tidak boleh kosong";
+    }
+
+    if (
+      root.strategy !== undefined &&
+      root.strategy !== "auto" &&
+      root.strategy !== "cloudscraper" &&
+      root.strategy !== "playwright"
+    ) {
+      return "Field `strategy` harus salah satu: auto, cloudscraper, playwright";
+    }
+
+    if (
+      root.targetWorkerId !== undefined &&
+      typeof root.targetWorkerId !== "string"
+    ) {
+      return "Field `targetWorkerId` harus berupa string";
+    }
+
+    const nextOptionsRaw = root.options;
+    if (
+      nextOptionsRaw !== undefined &&
+      (!nextOptionsRaw ||
+        typeof nextOptionsRaw !== "object" ||
+        Array.isArray(nextOptionsRaw))
+    ) {
+      return "Field `options` harus berupa object";
+    }
+
+    const nextOptions = (nextOptionsRaw ?? {}) as Record<string, unknown>;
+
+    const isStringRecord = (
+      value: unknown,
+    ): value is Record<string, string> => {
+      if (!value || typeof value !== "object" || Array.isArray(value))
+        return false;
+      return Object.values(value as Record<string, unknown>).every(
+        (v) => typeof v === "string",
+      );
+    };
+
+    if (
+      nextOptions.headers !== undefined &&
+      !isStringRecord(nextOptions.headers)
+    ) {
+      return "Field `options.headers` harus object dengan value string";
+    }
+    if (
+      nextOptions.formData !== undefined &&
+      !isStringRecord(nextOptions.formData)
+    ) {
+      return "Field `options.formData` harus object dengan value string";
+    }
+
+    if (
+      nextOptions.useCache !== undefined &&
+      typeof nextOptions.useCache !== "boolean"
+    ) {
+      return "Field `options.useCache` harus boolean";
+    }
+    if (
+      nextOptions.useProxy !== undefined &&
+      typeof nextOptions.useProxy !== "boolean"
+    ) {
+      return "Field `options.useProxy` harus boolean";
+    }
+
+    if (nextOptions.waitUntil !== undefined) {
+      const waitUntilValue = nextOptions.waitUntil;
+      if (
+        waitUntilValue !== "load" &&
+        waitUntilValue !== "domcontentloaded" &&
+        waitUntilValue !== "networkidle" &&
+        waitUntilValue !== "commit"
+      ) {
+        return "Field `options.waitUntil` harus salah satu: load, domcontentloaded, networkidle, commit";
+      }
+    }
+
+    const toStringNumber = (value: unknown): string | null => {
+      if (value === undefined) return null;
+      if (typeof value !== "number" || !Number.isFinite(value)) return null;
+      return String(Math.trunc(value));
+    };
+
+    const toRows = (
+      record: Record<string, string>,
+    ): { id: string; key: string; value: string }[] => {
+      return Object.entries(record).map(([key, value], index) => ({
+        id: `${Date.now()}-${index}-${key}`,
+        key,
+        value,
+      }));
+    };
+
+    setUrl(root.url.trim());
+    if (root.strategy) {
+      setStrategy(root.strategy as ScrapeStrategy);
+    }
+    setWorkerId(
+      typeof root.targetWorkerId === "string" ? root.targetWorkerId : "",
+    );
+
+    const nextTimeout = toStringNumber(nextOptions.timeoutMs);
+    const nextMaxRetries = toStringNumber(nextOptions.maxRetries);
+    const nextRetryDelay = toStringNumber(nextOptions.retryDelayMs);
+    const nextCacheTtl = toStringNumber(nextOptions.cacheTtlSeconds);
+    const nextAdditionalDelay = toStringNumber(nextOptions.additionalDelayMs);
+
+    if (nextTimeout !== null) setTimeoutMs(nextTimeout);
+    if (nextMaxRetries !== null) setMaxRetries(nextMaxRetries);
+    if (nextRetryDelay !== null) setRetryDelayMs(nextRetryDelay);
+    if (nextCacheTtl !== null) setCacheTtlSeconds(nextCacheTtl);
+    if (nextAdditionalDelay !== null) setAdditionalDelayMs(nextAdditionalDelay);
+
+    if (typeof nextOptions.waitUntil === "string") {
+      setWaitUntil(nextOptions.waitUntil as ScrapeWaitUntil);
+    }
+    if (typeof nextOptions.waitForSelector === "string") {
+      setWaitForSelector(nextOptions.waitForSelector);
+    }
+    if (typeof nextOptions.waitForFunction === "string") {
+      setWaitForFunction(nextOptions.waitForFunction);
+    }
+    if (typeof nextOptions.method === "string") {
+      setMethod(nextOptions.method.toUpperCase());
+    }
+    if (typeof nextOptions.useCache === "boolean") {
+      setUseCache(nextOptions.useCache);
+    }
+    if (typeof nextOptions.useProxy === "boolean") {
+      setUseProxy(nextOptions.useProxy);
+    }
+    if (typeof nextOptions.proxyUrl === "string") {
+      setProxyUrl(nextOptions.proxyUrl);
+    }
+
+    if (isStringRecord(nextOptions.headers)) {
+      setHeaders(toRows(nextOptions.headers));
+    }
+    if (isStringRecord(nextOptions.formData)) {
+      setFormData(toRows(nextOptions.formData));
+    }
+
+    return undefined;
+  };
+
   const onSubmit = async () => {
     if (!url.trim()) return;
 
@@ -304,7 +459,11 @@ export function DispatcherPage() {
               />
 
               {/* JSON Preview */}
-              <JsonPreview data={buildFullPayload()} title="Request Payload" />
+              <JsonPreview
+                data={buildFullPayload()}
+                title="Request Payload"
+                onManualPayloadChange={applyPayloadFromJson}
+              />
 
               {/* Submit Button */}
               <Button
