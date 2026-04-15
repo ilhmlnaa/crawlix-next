@@ -213,10 +213,12 @@ export interface ApiKeyRecord {
   createdAt: string;
   revokedAt?: string;
   lastUsedAt?: string;
+  rateLimit?: number | null;
 }
 
 export interface CreateApiKeyInput {
   label: string;
+  rateLimit?: number | null;
 }
 
 export interface CreateApiKeyResponse {

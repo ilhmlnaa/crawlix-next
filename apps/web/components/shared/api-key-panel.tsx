@@ -3,6 +3,7 @@
 import {
   Copy,
   EyeOff,
+  InfinityIcon,
   KeyRound,
   LoaderCircle,
   ShieldBan,
@@ -45,6 +46,8 @@ export function ApiKeyPanel({
   deletingKeyId,
   newKeyLabel,
   setNewKeyLabel,
+  newKeyRateLimit,
+  setNewKeyRateLimit,
   newApiKeyValue,
   copiedNewApiKey,
   onCreate,
@@ -60,6 +63,8 @@ export function ApiKeyPanel({
   deletingKeyId: string | null;
   newKeyLabel: string;
   setNewKeyLabel: (value: string) => void;
+  newKeyRateLimit: number | null;
+  setNewKeyRateLimit: (value: number | null) => void;
   newApiKeyValue: string | null;
   copiedNewApiKey: boolean;
   onCreate: () => void;
@@ -100,6 +105,35 @@ export function ApiKeyPanel({
                   className="w-full rounded-xl border border-[#1a2235] bg-[#121828] px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-indigo-500"
                   placeholder="e.g. Marketing Crawler"
                 />
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Rate Limit (requests/minute)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={newKeyRateLimit ?? ""}
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      setNewKeyRateLimit(
+                        value === "" ? null : parseInt(value, 10),
+                      );
+                    }}
+                    className="flex-1 rounded-xl border border-[#1a2235] bg-[#121828] px-4 py-3 text-sm text-slate-200 outline-none transition focus:border-indigo-500"
+                    placeholder="Leave empty for unlimited"
+                    min="1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl border border-[#1a2235] bg-[#121828] px-4 py-6 text-slate-300 hover:bg-[#1a2235]"
+                    onClick={() => setNewKeyRateLimit(null)}
+                    title="Set to unlimited"
+                  >
+                    <InfinityIcon className="size-5" />
+                  </Button>
+                </div>
               </div>
               <Button
                 className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-600/20"
@@ -175,6 +209,9 @@ export function ApiKeyPanel({
                         Status
                       </TableHead>
                       <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">
+                        Rate Limit
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">
                         Preview
                       </TableHead>
                       <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">
@@ -203,6 +240,12 @@ export function ApiKeyPanel({
                           >
                             {apiKey.status}
                           </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-400 font-mono">
+                          {apiKey.rateLimit === null ||
+                          apiKey.rateLimit === undefined
+                            ? "∞ Unlimited"
+                            : `${apiKey.rateLimit}/min`}
                         </TableCell>
                         <TableCell className="font-mono text-[11px] text-slate-400">
                           {apiKey.keyPreview}

@@ -12,6 +12,8 @@ export function KeysPage() {
     deletingKeyId,
     newKeyLabel,
     setNewKeyLabel,
+    newKeyRateLimit,
+    setNewKeyRateLimit,
     newApiKeyValue,
     copiedNewApiKey,
     handleCreateApiKey,
@@ -30,6 +32,8 @@ export function KeysPage() {
       deletingKeyId={deletingKeyId}
       newKeyLabel={newKeyLabel}
       setNewKeyLabel={setNewKeyLabel}
+      newKeyRateLimit={newKeyRateLimit}
+      setNewKeyRateLimit={setNewKeyRateLimit}
       newApiKeyValue={newApiKeyValue}
       copiedNewApiKey={copiedNewApiKey}
       onCreate={handleCreateApiKey}

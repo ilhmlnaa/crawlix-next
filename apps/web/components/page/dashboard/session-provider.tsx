@@ -52,6 +52,8 @@ export interface DashboardSessionValue {
   deletingKeyId: string | null;
   newKeyLabel: string;
   setNewKeyLabel: (v: string) => void;
+  newKeyRateLimit: number | null;
+  setNewKeyRateLimit: (v: number | null) => void;
   revealableKeyId: string | null;
   newApiKeyValue: string | null;
   copiedNewApiKey: boolean;
@@ -114,6 +116,7 @@ export function DashboardSessionProvider({
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
   const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
   const [newKeyLabel, setNewKeyLabel] = useState("Default scraper client");
+  const [newKeyRateLimit, setNewKeyRateLimit] = useState<number | null>(null);
   const [revealableKeyId, setRevealableKeyId] = useState<string | null>(null);
   const [newApiKeyValue, setNewApiKeyValue] = useState<string | null>(null);
   const [copiedNewApiKey, setCopiedNewApiKey] = useState(false);
@@ -271,7 +274,10 @@ export function DashboardSessionProvider({
       `${apiBaseUrl}/admin/api-keys`,
       {
         method: "POST",
-        body: JSON.stringify({ label: newKeyLabel }),
+        body: JSON.stringify({
+          label: newKeyLabel,
+          rateLimit: newKeyRateLimit,
+        }),
       },
     );
     if (created) {
@@ -348,6 +354,8 @@ export function DashboardSessionProvider({
         deletingKeyId,
         newKeyLabel,
         setNewKeyLabel,
+        newKeyRateLimit,
+        setNewKeyRateLimit,
         revealableKeyId,
         newApiKeyValue,
         copiedNewApiKey,

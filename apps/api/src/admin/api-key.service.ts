@@ -59,7 +59,10 @@ export class ApiKeyService {
     };
   }
 
-  async create(label: string): Promise<CreateApiKeyResponse> {
+  async create(
+    label: string,
+    rateLimit?: number | null,
+  ): Promise<CreateApiKeyResponse> {
     const keyId = randomBytes(8).toString('hex');
     const secret = randomBytes(24).toString('hex');
     const apiKey = this.buildApiKey(keyId, secret);
@@ -70,6 +73,7 @@ export class ApiKeyService {
       status: 'active',
       createdAt: new Date().toISOString(),
       keyHash: this.hashApiKey(apiKey),
+      rateLimit: rateLimit ?? undefined,
     };
 
     const redis = await this.getRedis();

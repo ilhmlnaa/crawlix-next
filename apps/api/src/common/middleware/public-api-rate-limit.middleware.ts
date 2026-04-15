@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { getApiRuntimeConfig } from '@repo/config';
 import type { NextFunction, Request, Response } from 'express';
+import { ApiKeyService } from '../../admin/api-key.service';
 
 interface RateLimitState {
   count: number;
@@ -16,15 +17,34 @@ interface RateLimitState {
 export class PublicApiRateLimitMiddleware implements NestMiddleware {
   private readonly buckets = new Map<string, RateLimitState>();
 
-  use(request: Request, response: Response, next: NextFunction) {
+  constructor(private readonly apiKeyService: ApiKeyService) {}
+
+  async use(request: Request, response: Response, next: NextFunction) {
     const config = getApiRuntimeConfig();
-    const limit = config.publicApiRateLimitPerMinute;
+    const globalLimit = config.publicApiRateLimitPerMinute;
     const now = Date.now();
+    const apiKeyHeader = request.headers['x-api-key']?.toString();
     const key =
-      request.headers['x-api-key']?.toString() ||
-      request.ip ||
-      request.socket.remoteAddress ||
-      'anonymous';
+      apiKeyHeader || request.ip || request.socket.remoteAddress || 'anonymous';
+
+    // Try to get custom rate limit from API key if present
+    let limit = globalLimit;
+    if (apiKeyHeader) {
+      const apiKeyRecord = await this.apiKeyService.validate(apiKeyHeader);
+      if (apiKeyRecord && apiKeyRecord.rateLimit === null) {
+        // null means unlimited
+        response.setHeader('X-RateLimit-Limit', 'unlimited');
+        response.setHeader('X-RateLimit-Remaining', 'unlimited');
+        response.setHeader(
+          'X-RateLimit-Reset',
+          String(Math.ceil((now + 60_000) / 1000)),
+        );
+        return next();
+      }
+      if (apiKeyRecord?.rateLimit) {
+        limit = apiKeyRecord.rateLimit;
+      }
+    }
 
     const current = this.buckets.get(key);
     const bucket =

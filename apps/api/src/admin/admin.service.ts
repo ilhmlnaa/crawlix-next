@@ -9,8 +9,8 @@ export class AdminService {
     return this.apiKeyService.list();
   }
 
-  createApiKey(label: string) {
-    return this.apiKeyService.create(label);
+  createApiKey(label: string, rateLimit?: number | null) {
+    return this.apiKeyService.create(label, rateLimit);
   }
 
   revokeApiKey(keyId: string) {

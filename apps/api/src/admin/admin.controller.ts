@@ -25,7 +25,7 @@ export class AdminController {
 
   @Post()
   create(@ZodBody(CreateApiKeyDtoSchema) body: CreateApiKeyDto) {
-    return this.adminService.createApiKey(body.label);
+    return this.adminService.createApiKey(body.label, body.rateLimit);
   }
 
   @Post(':keyId/revoke')
