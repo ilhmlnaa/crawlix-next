@@ -103,6 +103,8 @@ export interface ScrapeJobResult {
   retries?: number;
   cached?: boolean;
   targetWorkerId?: string;
+  executedWorkerId?: string;
+  executedServiceName?: string;
   retriedFromJobId?: string;
   webhookUrl?: string;
   idempotencyKey?: string;

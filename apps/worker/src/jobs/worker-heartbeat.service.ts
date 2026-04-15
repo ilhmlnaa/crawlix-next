@@ -49,9 +49,16 @@ export class WorkerHeartbeatService
     return this.workerId;
   }
 
+  getServiceName() {
+    return this.config.serviceName;
+  }
+
   getTargetedQueues() {
     return {
-      queueName: createTargetedQueueName(this.config.queue.queueName, this.workerId),
+      queueName: createTargetedQueueName(
+        this.config.queue.queueName,
+        this.workerId,
+      ),
       retryQueueName: createTargetedRetryQueueName(
         this.config.queue.queueName,
         this.workerId,
@@ -157,7 +164,9 @@ export class WorkerHeartbeatService
     const client = this.redisService.getClient();
     await client.connect().catch(() => undefined);
     await client.del(this.heartbeatKey).catch(() => undefined);
-    await client.srem(this.workersIndexKey, this.workerId).catch(() => undefined);
+    await client
+      .srem(this.workersIndexKey, this.workerId)
+      .catch(() => undefined);
     this.logger.log(
       JSON.stringify({
         event: 'worker.state.changed',

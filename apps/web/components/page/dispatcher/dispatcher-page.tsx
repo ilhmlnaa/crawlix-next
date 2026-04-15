@@ -33,7 +33,7 @@ import { JsonPreview } from "./json-preview";
 import { ResultDisplay } from "./result-display";
 
 export function DispatcherPage() {
-  const { overview, handleCreateJob } = useDashboardSession();
+  const { overview, handleCreateJob, apiBaseUrl } = useDashboardSession();
   const [url, setUrl] = useState("");
   const [strategy, setStrategy] = useState<ScrapeStrategy>("auto");
   const [workerId, setWorkerId] = useState("");
@@ -302,12 +302,39 @@ export function DispatcherPage() {
 
     const loadResult = async () => {
       try {
-        const response = await fetch(`/api/jobs/${lastJobId}/result`);
-        if (response.ok) {
-          const data = await response.json();
+        const response = await fetch(`${apiBaseUrl}/jobs/${lastJobId}/result`, {
+          credentials: "include",
+        });
+        if (!response.ok) {
           if (!cancelled) {
-            setLastJobResult(data);
+            setLastJobResult(null);
           }
+          return;
+        }
+
+        const raw = await response.text();
+        if (!raw.trim()) {
+          if (!cancelled) {
+            setLastJobResult(null);
+          }
+          return;
+        }
+
+        const data = JSON.parse(raw) as ScrapeJobResult;
+        if (!cancelled) {
+          setLastJobResult(data);
+          setLastJobRecord((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              status: data.status ?? prev.status,
+              progress: data.progress ?? prev.progress,
+              stage: data.stage ?? prev.stage,
+              strategy: data.strategy ?? prev.strategy,
+              updatedAt: new Date().toISOString(),
+              error: data.error,
+            } as ScrapeJobRecord;
+          });
         }
       } catch (err) {
         console.error("Failed to load result:", err);
@@ -325,7 +352,7 @@ export function DispatcherPage() {
       cancelled = true;
       clearInterval(pollInterval);
     };
-  }, [lastJobId]);
+  }, [apiBaseUrl, lastJobId]);
 
   return (
     <div className="w-full min-w-0 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">

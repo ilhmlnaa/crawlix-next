@@ -1,7 +1,7 @@
 "use client";
 
+import Link from "next/link";
 import { Clock3, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import type { ScrapeJobRecord, ScrapeJobResult } from "@repo/queue-contracts";
 import { cn } from "@/lib/utils";
@@ -73,7 +73,16 @@ export function ResultDisplay({
           <h3 className="text-lg font-bold text-white mb-2">Dispatch Result</h3>
           <p className="text-xs text-slate-500 font-mono">{job.jobId}</p>
         </div>
-        <StatusBadge status={job.status} />
+        <div className="flex flex-col items-end gap-2">
+          <StatusBadge status={job.status} />
+          <Link
+            href={`/jobs?jobId=${job.jobId}`}
+            rel="noreferrer"
+            className="inline-flex items-center rounded-lg border border-[#334155] bg-transparent px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-300 hover:border-indigo-500/40 hover:text-indigo-300"
+          >
+            Open Detail
+          </Link>
+        </div>
       </div>
 
       {/* Progress Bar */}

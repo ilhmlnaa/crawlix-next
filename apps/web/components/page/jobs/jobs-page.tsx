@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckSquare,
   Clock3,
@@ -13,7 +14,11 @@ import {
   Search,
   ArrowLeft,
 } from "lucide-react";
-import type { ScrapeJobRecord, ScrapeJobResult } from "@repo/queue-contracts";
+import type {
+  ScrapeJobRecord,
+  ScrapeJobResult,
+  WorkerHeartbeat,
+} from "@repo/queue-contracts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -82,6 +87,8 @@ function isHtmlLike(result: ScrapeJobResult | null): boolean {
 }
 
 export function JobsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { overview, handleRetry, handleCancel, apiBaseUrl } =
     useDashboardSession();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -104,6 +111,61 @@ export function JobsPage() {
 
   const selectedJob =
     overview?.recentJobs.find((j) => j.jobId === selectedJobId) ?? null;
+
+  useEffect(() => {
+    const jobIdFromQuery = searchParams.get("jobId");
+    if (!jobIdFromQuery) {
+      return;
+    }
+    if (jobIdFromQuery !== selectedJobId) {
+      setSelectedJobId(jobIdFromQuery);
+    }
+  }, [searchParams, selectedJobId]);
+
+  const workerById = useMemo(() => {
+    const map = new Map<string, WorkerHeartbeat>();
+    for (const worker of overview?.workers ?? []) {
+      map.set(worker.workerId, worker);
+    }
+    return map;
+  }, [overview?.workers]);
+
+  const executedOnLabel = useMemo<React.ReactNode>(() => {
+    const renderWorker = (serviceName?: string, workerId?: string) => {
+      if (!serviceName && !workerId) {
+        return "Pending Dispatch";
+      }
+
+      return (
+        <div className="leading-tight">
+          <div className="truncate">{serviceName ?? "Unknown Service"}</div>
+          {workerId && (
+            <div className="mt-1 truncate text-[11px] font-medium text-slate-500">
+              {workerId}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    if (
+      selectedResult?.executedServiceName ||
+      selectedResult?.executedWorkerId
+    ) {
+      return renderWorker(
+        selectedResult.executedServiceName,
+        selectedResult.executedWorkerId,
+      );
+    }
+
+    const workerId =
+      selectedResult?.targetWorkerId ?? selectedJob?.targetWorkerId;
+    if (workerId) {
+      return renderWorker(workerById.get(workerId)?.serviceName, workerId);
+    }
+
+    return "Pending Dispatch";
+  }, [selectedJob?.targetWorkerId, selectedResult, workerById]);
 
   useEffect(() => {
     if (!selectedJobId) {
@@ -178,6 +240,11 @@ export function JobsPage() {
     setCancellingJobId(null);
   };
 
+  const openJobDetail = (jobId: string) => {
+    setSelectedJobId(jobId);
+    router.replace(`/jobs?jobId=${jobId}`);
+  };
+
   return (
     <div className="flex min-h-[calc(100dvh-140px)] w-full min-w-0 flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 xl:h-[calc(100vh-140px)] xl:flex-row">
       {/* List Container */}
@@ -217,7 +284,7 @@ export function JobsPage() {
             {jobs.map((job) => (
               <button
                 key={job.jobId}
-                onClick={() => setSelectedJobId(job.jobId)}
+                onClick={() => openJobDetail(job.jobId)}
                 className={cn(
                   "w-full text-left flex items-center justify-between gap-4 rounded-xl px-4 py-4 transition-all group",
                   selectedJobId === job.jobId
@@ -267,7 +334,10 @@ export function JobsPage() {
           {/* Mobile Header Back */}
           <div className="xl:hidden p-4 border-b border-[#1a2235]">
             <button
-              onClick={() => setSelectedJobId(null)}
+              onClick={() => {
+                setSelectedJobId(null);
+                router.replace("/jobs");
+              }}
               className="flex items-center gap-2 text-indigo-400 font-bold text-sm"
             >
               <ArrowLeft className="size-4" /> Back to Queue
@@ -346,14 +416,7 @@ export function JobsPage() {
                     label="Assigned Node"
                     value={selectedJob?.targetWorkerId ?? "Global Cluster"}
                   />
-                  <InfoBox
-                    label="Executed On"
-                    value={
-                      selectedResult?.targetWorkerId ??
-                      selectedJob?.targetWorkerId ??
-                      "Pending Dispatch"
-                    }
-                  />
+                  <InfoBox label="Executed On" value={executedOnLabel} />
                   <InfoBox
                     label="Last Latency"
                     value={
