@@ -73,7 +73,7 @@ export class ApiKeyService {
       status: 'active',
       createdAt: new Date().toISOString(),
       keyHash: this.hashApiKey(apiKey),
-      rateLimit: rateLimit ?? undefined,
+      rateLimit,
     };
 
     const redis = await this.getRedis();

@@ -23,16 +23,14 @@ export class PublicApiRateLimitMiddleware implements NestMiddleware {
     const config = getApiRuntimeConfig();
     const globalLimit = config.publicApiRateLimitPerMinute;
     const now = Date.now();
-    const apiKeyHeader = request.headers['x-api-key']?.toString();
+    const apiKeyHeader = this.apiKeyService.extractFromRequest(request);
     const key =
       apiKeyHeader || request.ip || request.socket.remoteAddress || 'anonymous';
 
-    // Try to get custom rate limit from API key if present
     let limit = globalLimit;
     if (apiKeyHeader) {
       const apiKeyRecord = await this.apiKeyService.validate(apiKeyHeader);
       if (apiKeyRecord && apiKeyRecord.rateLimit === null) {
-        // null means unlimited
         response.setHeader('X-RateLimit-Limit', 'unlimited');
         response.setHeader('X-RateLimit-Remaining', 'unlimited');
         response.setHeader(
