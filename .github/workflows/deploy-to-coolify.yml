@@ -185,15 +185,20 @@ jobs:
             fi
           }
 
-          has_worker_webhook=false
-          printf '%s' "$COOLIFY_WORKER_WEBHOOK_URLS" | tr ',;' '\n' | while IFS= read -r webhook_url; do
+          worker_webhook_count=0
+          normalized_worker_urls=$(printf '%s' "$COOLIFY_WORKER_WEBHOOK_URLS" | tr ',;' '\n')
+
+          while IFS= read -r webhook_url; do
+            webhook_url=$(echo "$webhook_url" | xargs)
             if [ -z "$webhook_url" ]; then
               continue
             fi
-            has_worker_webhook=true
+
+            worker_webhook_count=$((worker_webhook_count + 1))
             trigger_webhook "$webhook_url"
-          done
-          if [ "$has_worker_webhook" = false ]; then
+          done <<< "$normalized_worker_urls"
+
+          if [ "$worker_webhook_count" -eq 0 ]; then
             echo "No worker webhook URLs were configured"
             exit 1
           fi
