@@ -1,0 +1,276 @@
+name: Deploy to Coolify
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment target
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - api
+          - worker
+          - web
+
+  workflow_run:
+    workflows:
+      - Build and Push API & Worker Images to GHCR
+    types:
+      - completed
+
+  push:
+    branches:
+      - main
+    paths:
+      - apps/web/**
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch || github.ref_name || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy to Coolify
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && contains(fromJSON('["main","zenime/be"]'), github.event.workflow_run.head_branch)) }}
+
+    steps:
+      - name: Resolve deployment targets
+        id: targets
+        shell: bash
+        run: |
+          deploy_api=false
+          deploy_worker=false
+          deploy_web=false
+
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            deploy_api=true
+            deploy_worker=true
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            deploy_web=true
+          else
+            case "${{ inputs.target }}" in
+              all)
+                deploy_api=true
+                deploy_worker=true
+                deploy_web=true
+                ;;
+              api)
+                deploy_api=true
+                ;;
+              worker)
+                deploy_worker=true
+                ;;
+              web)
+                deploy_web=true
+                ;;
+            esac
+          fi
+
+          echo "deploy_api=$deploy_api" >> "$GITHUB_OUTPUT"
+          echo "deploy_worker=$deploy_worker" >> "$GITHUB_OUTPUT"
+          echo "deploy_web=$deploy_web" >> "$GITHUB_OUTPUT"
+
+      - name: Disable Bot Fight Mode
+        id: disable_bfm
+        if: ${{ steps.targets.outputs.deploy_api == 'true' || steps.targets.outputs.deploy_worker == 'true' || steps.targets.outputs.deploy_web == 'true' }}
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          BM_RESPONSE=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/bot_management" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json")
+
+          echo "Bot Management Response: $BM_RESPONSE"
+
+          SUCCESS=$(echo "$BM_RESPONSE" | jq -r '.success')
+          if [ "$SUCCESS" = "true" ]; then
+            CURRENT_BFM=$(echo "$BM_RESPONSE" | jq -r '.result.fight_mode')
+            echo "original_bfm=$CURRENT_BFM" >> "$GITHUB_OUTPUT"
+
+            if [ "$CURRENT_BFM" = "true" ]; then
+              DISABLE_RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/bot_management" \
+                -H "Authorization: Bearer $CF_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data-raw '{"fight_mode":false}')
+
+              echo "Disable Response: $DISABLE_RESPONSE"
+
+              DISABLE_SUCCESS=$(echo "$DISABLE_RESPONSE" | jq -r '.success')
+              if [ "$DISABLE_SUCCESS" = "true" ]; then
+                sleep 15
+              else
+                echo "Failed to disable Bot Fight Mode"
+                echo "$DISABLE_RESPONSE"
+                exit 1
+              fi
+            fi
+          else
+            echo "Bot Management API not available"
+            echo "$BM_RESPONSE"
+            exit 1
+          fi
+
+      - name: Deploy API to Coolify
+        if: ${{ steps.targets.outputs.deploy_api == 'true' }}
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_API_WEBHOOK_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_WEBHOOK_URL" ]; then
+            echo "COOLIFY_API_WEBHOOK_URL is not set"
+            exit 1
+          fi
+
+          if [ -z "$COOLIFY_TOKEN" ]; then
+            echo "COOLIFY_TOKEN is not set"
+            exit 1
+          fi
+
+          response=$(curl -X POST "$COOLIFY_WEBHOOK_URL" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -w "\n%{http_code}" \
+            -s)
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" -ne 200 ]; then
+            echo "API deployment failed with status $http_code"
+            echo "$body"
+            exit 1
+          fi
+
+      - name: Deploy Worker to Coolify
+        if: ${{ steps.targets.outputs.deploy_worker == 'true' }}
+        env:
+          COOLIFY_WORKER_WEBHOOK_URLS: ${{ secrets.COOLIFY_WORKER_WEBHOOK_URLS }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_WORKER_WEBHOOK_URLS" ]; then
+            echo "COOLIFY_WORKER_WEBHOOK_URLS is not set"
+            exit 1
+          fi
+
+          if [ -z "$COOLIFY_TOKEN" ]; then
+            echo "COOLIFY_TOKEN is not set"
+            exit 1
+          fi
+
+          trigger_webhook() {
+            local webhook_url="$1"
+            response=$(curl -X POST "$webhook_url" \
+              -H "Authorization: Bearer $COOLIFY_TOKEN" \
+              -H "Content-Type: application/json" \
+              -w "\n%{http_code}" \
+              -s)
+
+            http_code=$(echo "$response" | tail -n1)
+            body=$(echo "$response" | head -n -1)
+
+            echo "HTTP Status: $http_code"
+            echo "Response: $body"
+
+            if [ "$http_code" -ne 200 ]; then
+              echo "Worker deployment failed with status $http_code"
+              echo "$body"
+              exit 1
+            fi
+          }
+
+          has_worker_webhook=false
+          printf '%s' "$COOLIFY_WORKER_WEBHOOK_URLS" | tr ',;' '\n' | while IFS= read -r webhook_url; do
+            if [ -z "$webhook_url" ]; then
+              continue
+            fi
+            has_worker_webhook=true
+            trigger_webhook "$webhook_url"
+          done
+          if [ "$has_worker_webhook" = false ]; then
+            echo "No worker webhook URLs were configured"
+            exit 1
+          fi
+
+      - name: Deploy Web to Coolify
+        if: ${{ steps.targets.outputs.deploy_web == 'true' }}
+        env:
+          COOLIFY_WEBHOOK_URL: ${{ secrets.COOLIFY_WEB_WEBHOOK_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$COOLIFY_WEBHOOK_URL" ]; then
+            echo "COOLIFY_WEB_WEBHOOK_URL is not set"
+            exit 1
+          fi
+
+          if [ -z "$COOLIFY_TOKEN" ]; then
+            echo "COOLIFY_TOKEN is not set"
+            exit 1
+          fi
+
+          response=$(curl -X POST "$COOLIFY_WEBHOOK_URL" \
+            -H "Authorization: Bearer $COOLIFY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -w "\n%{http_code}" \
+            -s)
+
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+
+          if [ "$http_code" -ne 200 ]; then
+            echo "Web deployment failed with status $http_code"
+            echo "$body"
+            exit 1
+          fi
+
+      - name: Re-enable Bot Fight Mode
+        if: always()
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        run: |
+          ORIGINAL_BFM="${{ steps.disable_bfm.outputs.original_bfm }}"
+
+          if [ "$ORIGINAL_BFM" = "true" ]; then
+            ENABLE_RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/bot_management" \
+              -H "Authorization: Bearer $CF_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data-raw '{"fight_mode":true}')
+
+            ENABLE_SUCCESS=$(echo "$ENABLE_RESPONSE" | jq -r '.success')
+            if [ "$ENABLE_SUCCESS" != "true" ]; then
+              echo "Failed to re-enable Bot Fight Mode"
+              echo "$ENABLE_RESPONSE"
+            fi
+          fi
+
+      - name: Deployment Summary
+        if: success()
+        run: |
+          echo "### Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Environment: Coolify" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Triggered by: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "API: ${{ steps.targets.outputs.deploy_api }}" >> $GITHUB_STEP_SUMMARY
+          echo "Worker: ${{ steps.targets.outputs.deploy_worker }}" >> $GITHUB_STEP_SUMMARY
+          echo "Web: ${{ steps.targets.outputs.deploy_web }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Deployment Failed
+        if: failure()
+        run: |
+          echo "### Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Commit: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the logs above for more details." >> $GITHUB_STEP_SUMMARY

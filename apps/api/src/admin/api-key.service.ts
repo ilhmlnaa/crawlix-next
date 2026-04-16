@@ -81,7 +81,7 @@ export class ApiKeyService {
     await redis.lrem(this.indexKey, 0, keyId);
     await redis.lpush(this.indexKey, keyId);
 
-    const { keyHash, ...publicRecord } = record;
+    const publicRecord = this.toPublicRecord(record);
     return {
       apiKey,
       record: publicRecord,
@@ -101,8 +101,7 @@ export class ApiKeyService {
       return null;
     }
 
-    const { keyHash, ...record } = stored;
-    return record;
+    return this.toPublicRecord(stored);
   }
 
   private async getStoredById(
@@ -111,6 +110,12 @@ export class ApiKeyService {
     const redis = await this.getRedis();
     const value = await redis.get(this.getRecordKey(keyId));
     return value ? (JSON.parse(value) as StoredApiKeyRecord) : null;
+  }
+
+  private toPublicRecord(stored: StoredApiKeyRecord): ApiKeyRecord {
+    return Object.fromEntries(
+      Object.entries(stored).filter(([key]) => key !== 'keyHash'),
+    ) as ApiKeyRecord;
   }
 
   async revoke(keyId: string): Promise<ApiKeyRecord | null> {
@@ -128,8 +133,7 @@ export class ApiKeyService {
     const redis = await this.getRedis();
     await redis.set(this.getRecordKey(keyId), JSON.stringify(updated));
 
-    const { keyHash, ...record } = updated;
-    return record;
+    return this.toPublicRecord(updated);
   }
 
   async delete(keyId: string): Promise<ApiKeyRecord | null> {
@@ -142,8 +146,7 @@ export class ApiKeyService {
     await redis.del(this.getRecordKey(keyId));
     await redis.lrem(this.indexKey, 0, keyId);
 
-    const { keyHash, ...record } = existing;
-    return record;
+    return this.toPublicRecord(existing);
   }
 
   async validate(rawApiKey?: string | null): Promise<ApiKeyRecord | null> {
@@ -175,8 +178,7 @@ export class ApiKeyService {
     const redis = await this.getRedis();
     await redis.set(this.getRecordKey(parsed.keyId), JSON.stringify(updated));
 
-    const { keyHash, ...record } = updated;
-    return record;
+    return this.toPublicRecord(updated);
   }
 
   extractFromRequest(request: Request) {
