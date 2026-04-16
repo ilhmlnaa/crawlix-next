@@ -112,6 +112,12 @@ export function JobsPage() {
   const selectedJob =
     overview?.recentJobs.find((j) => j.jobId === selectedJobId) ?? null;
 
+  const proxyEnabled = selectedJob?.options?.useProxy === true;
+  const proxyUrl = selectedJob?.options?.proxyUrl?.trim();
+  const proxyUrlLabel = proxyEnabled
+    ? proxyUrl || "Worker fallback (SCRAPER_PROXY_URL)"
+    : "Disabled";
+
   useEffect(() => {
     const jobIdFromQuery = searchParams.get("jobId");
     if (!jobIdFromQuery) {
@@ -412,6 +418,11 @@ export function JobsPage() {
                     value={selectedJob?.strategy ?? "—"}
                     className="capitalize"
                   />
+                  <InfoBox
+                    label="Proxy"
+                    value={proxyEnabled ? "Enabled" : "Disabled"}
+                  />
+                  <InfoBox label="Proxy URL" value={proxyUrlLabel} />
                   <InfoBox
                     label="Assigned Node"
                     value={selectedJob?.targetWorkerId ?? "Global Cluster"}

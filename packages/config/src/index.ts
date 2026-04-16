@@ -66,6 +66,7 @@ export interface ScraperRuntimeConfig {
   retryDelayMs: number;
   userAgent: string;
   proxyUrl?: string;
+  forceProxy: boolean;
   playwrightHeadless: boolean;
   playwrightExecutablePath?: string;
   browserIdleTimeoutMs: number;
@@ -104,10 +105,7 @@ function readQueueConfig(env: NodeJS.ProcessEnv): QueueConfig {
       env.RABBITMQ_WEBHOOK_DLQ_QUEUE_NAME ?? "crawlix.scrape.webhooks.dlq",
     retryDelayMs: readNumber(env.RABBITMQ_RETRY_DELAY_MS, 15000),
     maxDeliveryAttempts: readNumber(env.RABBITMQ_MAX_DELIVERY_ATTEMPTS, 3),
-    webhookRetryDelayMs: readNumber(
-      env.RABBITMQ_WEBHOOK_RETRY_DELAY_MS,
-      15000,
-    ),
+    webhookRetryDelayMs: readNumber(env.RABBITMQ_WEBHOOK_RETRY_DELAY_MS, 15000),
     webhookMaxDeliveryAttempts: readNumber(
       env.RABBITMQ_WEBHOOK_MAX_DELIVERY_ATTEMPTS,
       5,
@@ -220,6 +218,7 @@ function validateScraperConfig(
             throw new Error("SCRAPER_RETRY_DELAY_MS must be 0 or greater");
           })(),
     userAgent: assertNonEmpty(config.userAgent, "SCRAPER_USER_AGENT"),
+    forceProxy: config.forceProxy,
     playwrightHeadless: config.playwrightHeadless,
     browserIdleTimeoutMs: assertPositiveInteger(
       config.browserIdleTimeoutMs,
@@ -326,6 +325,7 @@ function readRedisConfig(env: NodeJS.ProcessEnv): RedisConfig {
 
 function readScraperConfig(env: NodeJS.ProcessEnv): ScraperRuntimeConfig {
   const defaultStrategy = env.SCRAPER_DEFAULT_STRATEGY;
+  const forceProxy = env.SCRAPER_FORCE_PROXY === "true";
 
   return {
     defaultStrategy:
@@ -342,6 +342,7 @@ function readScraperConfig(env: NodeJS.ProcessEnv): ScraperRuntimeConfig {
       env.SCRAPER_USER_AGENT ??
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
     proxyUrl: env.SCRAPER_PROXY_URL,
+    forceProxy,
     playwrightHeadless: env.PLAYWRIGHT_HEADLESS !== "false",
     playwrightExecutablePath: env.PLAYWRIGHT_EXECUTABLE_PATH,
     browserIdleTimeoutMs: readNumber(
@@ -376,7 +377,7 @@ export function getApiRuntimeConfig(
 ): ApiRuntimeConfig {
   return {
     serviceName: env.API_SERVICE_NAME ?? "crawlix-api",
-    port: Number(env.PORT ?? readPort(env, "API_PORT", 3001)),    
+    port: Number(env.PORT ?? readPort(env, "API_PORT", 3001)),
     corsOrigin: env.CORS_ORIGIN ?? "*",
     publicApiRateLimitPerMinute: readNumber(
       env.PUBLIC_API_RATE_LIMIT_PER_MINUTE,

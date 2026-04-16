@@ -147,13 +147,15 @@ function resolveProxyUrl(
   options: ScrapeJobOptionsWithProxy,
   config: ScraperRuntimeConfig,
 ): string | undefined {
-  if (options.useProxy !== true) {
-    return undefined;
-  }
-
   const requestProxyUrl = options.proxyUrl?.trim();
   if (requestProxyUrl) {
     return requestProxyUrl;
+  }
+
+  if (options.useProxy !== true) {
+    if (config.forceProxy !== true) {
+      return undefined;
+    }
   }
 
   const fallbackProxyUrl = config.proxyUrl?.trim();
