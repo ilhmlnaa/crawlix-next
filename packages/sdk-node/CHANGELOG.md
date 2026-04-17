@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.4
+
+- Fixed intermittent race condition where `waitForCompletion(..., { fetchResultOnCompleted: true })` could observe `status: completed` while `/jobs/:id/result` was still temporarily `null`
+- Added internal retry logic in SDK polling to wait for a non-null terminal result within the same timeout window
+- Added regression test for temporary `null` result response before successful completion payload
+
 ## 1.0.3
 
 - Renamed `createAndWaitFast` to `createAndWaitAdaptive` before public adoption
