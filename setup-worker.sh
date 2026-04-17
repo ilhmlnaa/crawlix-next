@@ -12,6 +12,24 @@ echo ""
 echo "TASK [$1]"
 }
 
+PROJECT_ROOT="$(pwd -P)"
+TARGET_USER="${SUDO_USER:-$(id -un)}"
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+
+if [ -z "$TARGET_HOME" ]; then
+failed "could not resolve home directory for $TARGET_USER"
+fi
+
+run_as_target_user() {
+local command="$1"
+
+if [ "$(id -un)" = "$TARGET_USER" ]; then
+bash -lc "$command"
+else
+sudo -u "$TARGET_USER" -H bash -lc "$command"
+fi
+}
+
 # update system
 
 run_task "Update apt packages"
@@ -47,12 +65,12 @@ fi
 
 run_task "Install NVM"
 
-export NVM_DIR="$HOME/.nvm"
+export NVM_DIR="$TARGET_HOME/.nvm"
 
 if [ -d "$NVM_DIR" ]; then
 ok "nvm already installed"
 else
-curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+run_as_target_user 'curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash'
 changed "nvm installed"
 fi
 
@@ -62,15 +80,14 @@ source "$NVM_DIR/nvm.sh"
 
 run_task "Install Node.js 24"
 
-if nvm ls 24 | grep -q "v24"; then
+if run_as_target_user 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm ls 24 | grep -q "v24"'; then
 ok "Node.js 24 already installed"
 else
-nvm install 24 > /dev/null
+run_as_target_user 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm install 24 > /dev/null'
 changed "Node.js 24 installed"
 fi
 
-nvm use 24 > /dev/null
-nvm alias default 24 > /dev/null
+run_as_target_user 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; nvm use 24 > /dev/null; nvm alias default 24 > /dev/null'
 
 # enable pnpm
 
@@ -79,8 +96,13 @@ run_task "Enable pnpm"
 if command -v pnpm > /dev/null 2>&1; then
 ok "pnpm already available"
 else
-corepack enable
-corepack prepare pnpm@latest --activate
+PNPM_VERSION="$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' "$PROJECT_ROOT/package.json" | head -n 1)"
+
+if [ -z "$PNPM_VERSION" ]; then
+failed "could not determine pnpm version"
+fi
+
+run_as_target_user "export NVM_DIR=\"\$HOME/.nvm\"; . \"\$NVM_DIR/nvm.sh\"; corepack enable; corepack install -g \"pnpm@${PNPM_VERSION}\" > /dev/null"
 changed "pnpm enabled"
 fi
 
@@ -91,7 +113,7 @@ run_task "Install PM2"
 if command -v pm2 > /dev/null 2>&1; then
 ok "pm2 already installed"
 else
-pnpm add -g pm2 > /dev/null
+run_as_target_user 'export NVM_DIR="$HOME/.nvm"; . "$NVM_DIR/nvm.sh"; npm install -g pm2 > /dev/null'
 changed "pm2 installed"
 fi
 
@@ -102,44 +124,36 @@ run_task "Install Chromium"
 if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
 ok "chromium already installed"
 else
-sudo apt install -y 
-chromium-browser 
-fonts-freefont-ttf 
-libnss3 
-libatk-bridge2.0-0 
-libx11-xcb1 
-libxcb-dri3-0 
-libxcomposite1 
-libxdamage1 
-libxrandr2 
-libgbm1 
-libasound2 
-libpangocairo-1.0-0 
-libatk1.0-0 
-libcups2 
-libdrm2 
-libxfixes3 
-libxkbcommon0 
-libxshmfence1 > /dev/null
+CHROMIUM_PACKAGE="chromium-browser"
+
+if ! apt-cache show chromium-browser > /dev/null 2>&1; then
+CHROMIUM_PACKAGE="chromium"
+fi
+
+CHROMIUM_PKGS=(
+"${CHROMIUM_PACKAGE}"
+fonts-freefont-ttf
+libnss3
+libatk-bridge2.0-0
+libx11-xcb1
+libxcb-dri3-0
+libxcomposite1
+libxdamage1
+libxrandr2
+libgbm1
+libasound2
+libpangocairo-1.0-0
+libatk1.0-0
+libcups2
+libdrm2
+libxfixes3
+libxkbcommon0
+libxshmfence1
+)
+
+sudo apt install -y "${CHROMIUM_PKGS[@]}" > /dev/null
 
 changed "chromium installed"
-fi
-
-# clone project
-
-run_task "Clone project"
-
-if [ -n "$1" ]; then
-if [ -d "app" ]; then
-skipped "app already exists"
-cd app
-else
-git clone "$1" app > /dev/null
-changed "repository cloned"
-cd app
-fi
-else
-ok "using existing directory"
 fi
 
 # install dependencies
