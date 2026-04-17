@@ -4,8 +4,8 @@ services:
     container_name: crawlix-rabbitmq
     restart: unless-stopped
     ports:
-      - '5672:5672'
-      - '15672:15672'
+      - "5672:5672"
+      - "15672:15672"
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -22,7 +22,7 @@ services:
     container_name: crawlix-redis
     restart: unless-stopped
     ports:
-      - '6379:6379'
+      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 15s
@@ -68,13 +68,18 @@ services:
       SCRAPER_CACHE_TTL_SECONDS: 900
       SCRAPER_MAX_RETRIES: 2
       SCRAPER_RETRY_DELAY_MS: 1000
-      SCRAPER_PROXY_URL:
+      SCRAPER_PROXY_URL: ${SCRAPER_PROXY_URL:-}
+      SCRAPER_FORCE_PROXY: ${SCRAPER_FORCE_PROXY:-false}
       PLAYWRIGHT_HEADLESS: true
       PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS: 120000
     ports:
-      - '3001:3001'
+      - "3001:3001"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:' + (process.env.API_PORT || '3001') + '/api/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:'' + (process.env.API_PORT || ''3001'') + ''/api/health/ready'').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"',
+        ]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -90,6 +95,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - ./apps/worker/.env
     environment:
       WORKER_PORT: 3002
       WORKER_SERVICE_NAME: crawlix-worker
@@ -107,11 +114,14 @@ services:
       SCRAPER_CACHE_TTL_SECONDS: 900
       SCRAPER_MAX_RETRIES: 2
       SCRAPER_RETRY_DELAY_MS: 1000
-      SCRAPER_PROXY_URL:
       PLAYWRIGHT_HEADLESS: true
       PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS: 120000
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:' + (process.env.WORKER_PORT || '3002') + '/worker/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:'' + (process.env.WORKER_PORT || ''3002'') + ''/worker/health/ready'').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"',
+        ]
       interval: 20s
       timeout: 10s
       retries: 5
@@ -129,9 +139,13 @@ services:
       DASHBOARD_PORT: 3000
       NEXT_PUBLIC_API_BASE_URL: http://api:3001/api
     ports:
-      - '3000:3000'
+      - "3000:3000"
     healthcheck:
-      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:' + (process.env.DASHBOARD_PORT || '3000')).then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\""]
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:'' + (process.env.DASHBOARD_PORT || ''3000'')).then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"',
+        ]
       interval: 20s
       timeout: 10s
       retries: 5

@@ -84,6 +84,8 @@ export interface ScrapeJobRecord {
   webhookSecret?: string;
   idempotencyKey?: string;
   error?: string;
+  proxyEnabled?: boolean;
+  proxyUrl?: string;
 }
 
 export interface ScrapeJobResult {
@@ -109,6 +111,8 @@ export interface ScrapeJobResult {
   webhookUrl?: string;
   idempotencyKey?: string;
   error?: string;
+  proxyEnabled?: boolean;
+  proxyUrl?: string;
 }
 
 export interface EnqueueJobResponse {

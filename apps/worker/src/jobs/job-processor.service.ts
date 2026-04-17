@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { getWorkerRuntimeConfig } from '@repo/config';
 import { ScraperService } from '@repo/scraper';
+import { resolveProxySettings } from '@repo/scraper';
 import type { ScrapeJobMessage } from '@repo/queue-contracts';
 import { JobStoreService } from './job-store.service';
 import { ScrapeCacheService } from './scrape-cache.service';
@@ -86,6 +88,14 @@ export class JobProcessorService implements OnModuleDestroy {
     await this.workerHeartbeat.markProcessing(job.jobId);
     await this.jobStore.updateStatus(job.jobId, 'processing');
     await this.jobStore.updateProgress(job.jobId, 5, 'fetching');
+    const proxySettings = resolveProxySettings(
+      job.options,
+      getWorkerRuntimeConfig().scraper,
+    );
+    await this.jobStore.patchRecord(job.jobId, {
+      proxyEnabled: proxySettings.enabled,
+      proxyUrl: proxySettings.proxyUrl,
+    });
 
     try {
       const cachedResult =
@@ -218,6 +228,8 @@ export class JobProcessorService implements OnModuleDestroy {
 
       const result = {
         ...executionResult,
+        proxyEnabled: proxySettings.enabled,
+        proxyUrl: proxySettings.proxyUrl,
         targetWorkerId: job.targetWorkerId,
         executedWorkerId: this.workerHeartbeat.getWorkerId(),
         executedServiceName: this.workerHeartbeat.getServiceName(),

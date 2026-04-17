@@ -82,9 +82,10 @@ interface ScraperStrategy {
   ): Promise<ScraperStrategyResult>;
 }
 
-type ScrapeJobOptionsWithProxy = ScrapeJobOptions & {
+export interface ProxyResolution {
+  enabled: boolean;
   proxyUrl?: string;
-};
+}
 
 export interface BrowserRuntimeStats {
   available: boolean;
@@ -144,22 +145,35 @@ function readTimeout(
 }
 
 function resolveProxyUrl(
-  options: ScrapeJobOptionsWithProxy,
+  options: ScrapeJobOptions,
   config: ScraperRuntimeConfig,
 ): string | undefined {
+  return resolveProxySettings(options, config).proxyUrl;
+}
+
+export function resolveProxySettings(
+  options: ScrapeJobOptions,
+  config: ScraperRuntimeConfig,
+): ProxyResolution {
+  const forcedProxyUrl = config.proxyUrl?.trim();
+  if (config.forceProxy === true) {
+    return forcedProxyUrl
+      ? { enabled: true, proxyUrl: forcedProxyUrl }
+      : { enabled: false };
+  }
+
   const requestProxyUrl = options.proxyUrl?.trim();
   if (requestProxyUrl) {
-    return requestProxyUrl;
+    return { enabled: true, proxyUrl: requestProxyUrl };
   }
 
   if (options.useProxy !== true) {
-    if (config.forceProxy !== true) {
-      return undefined;
-    }
+    return { enabled: false };
   }
 
-  const fallbackProxyUrl = config.proxyUrl?.trim();
-  return fallbackProxyUrl ? fallbackProxyUrl : undefined;
+  return forcedProxyUrl
+    ? { enabled: true, proxyUrl: forcedProxyUrl }
+    : { enabled: false };
 }
 
 class BrowserPoolManager {

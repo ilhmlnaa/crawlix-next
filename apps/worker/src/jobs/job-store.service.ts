@@ -51,6 +51,25 @@ export class JobStoreService {
     await client.ltrim(this.indexKey, 0, 49);
   }
 
+  async patchRecord(
+    jobId: string,
+    patch: Partial<ScrapeJobRecord>,
+  ): Promise<ScrapeJobRecord | null> {
+    const existing = await this.getRecord(jobId);
+    if (!existing) {
+      return null;
+    }
+
+    const updated: ScrapeJobRecord = {
+      ...existing,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await this.saveRecord(updated);
+    return updated;
+  }
+
   async saveResult(result: ScrapeJobResult): Promise<void> {
     const client = this.redisService.getClient();
     const keys = this.getKeys(result.jobId);

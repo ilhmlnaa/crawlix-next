@@ -31,6 +31,7 @@ services:
       SCRAPER_MAX_RETRIES: ${SCRAPER_MAX_RETRIES:-2}
       SCRAPER_RETRY_DELAY_MS: ${SCRAPER_RETRY_DELAY_MS:-1000}
       SCRAPER_PROXY_URL: ${SCRAPER_PROXY_URL:-}
+      SCRAPER_FORCE_PROXY: ${SCRAPER_FORCE_PROXY:-false}
       PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
       PLAYWRIGHT_EXECUTABLE_PATH: ${PLAYWRIGHT_EXECUTABLE_PATH:-}
       PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS: ${PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS:-120000}
@@ -40,7 +41,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:' + (process.env.API_PORT || '3001') + '/api/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\"",
+          'node -e "fetch(''http://127.0.0.1:'' + (process.env.API_PORT || ''3001'') + ''/api/health/ready'').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"',
         ]
       interval: 20s
       timeout: 10s
@@ -69,6 +70,7 @@ services:
       SCRAPER_MAX_RETRIES: ${SCRAPER_MAX_RETRIES:-2}
       SCRAPER_RETRY_DELAY_MS: ${SCRAPER_RETRY_DELAY_MS:-1000}
       SCRAPER_PROXY_URL: ${SCRAPER_PROXY_URL:-}
+      SCRAPER_FORCE_PROXY: ${SCRAPER_FORCE_PROXY:-false}
       PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
       PLAYWRIGHT_EXECUTABLE_PATH: ${PLAYWRIGHT_EXECUTABLE_PATH:-}
       PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS: ${PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS:-120000}
@@ -77,7 +79,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:' + (process.env.WORKER_PORT || '3002') + '/worker/health/ready').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\"",
+          'node -e "fetch(''http://127.0.0.1:'' + (process.env.WORKER_PORT || ''3002'') + ''/worker/health/ready'').then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"',
         ]
       interval: 20s
       timeout: 10s
@@ -97,7 +99,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "node -e \"fetch('http://127.0.0.1:' + (process.env.DASHBOARD_PORT || '3000')).then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))\"",
+          'node -e "fetch(''http://127.0.0.1:'' + (process.env.DASHBOARD_PORT || ''3000'')).then((res)=>{if(!res.ok)process.exit(1)}).catch(()=>process.exit(1))"',
         ]
       interval: 20s
       timeout: 10s

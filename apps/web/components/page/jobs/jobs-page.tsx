@@ -112,8 +112,14 @@ export function JobsPage() {
   const selectedJob =
     overview?.recentJobs.find((j) => j.jobId === selectedJobId) ?? null;
 
-  const proxyEnabled = selectedJob?.options?.useProxy === true;
-  const proxyUrl = selectedJob?.options?.proxyUrl?.trim();
+  const proxyEnabled =
+    selectedResult?.proxyEnabled ??
+    selectedJob?.proxyEnabled ??
+    selectedJob?.options?.useProxy === true;
+  const proxyUrl =
+    selectedResult?.proxyUrl?.trim() ??
+    selectedJob?.proxyUrl?.trim() ??
+    selectedJob?.options?.proxyUrl?.trim();
   const proxyUrlLabel = proxyEnabled
     ? proxyUrl || "Worker fallback (SCRAPER_PROXY_URL)"
     : "Disabled";
