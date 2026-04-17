@@ -124,34 +124,30 @@ run_task "Install Chromium"
 if command -v chromium-browser > /dev/null 2>&1 || command -v chromium > /dev/null 2>&1; then
 ok "chromium already installed"
 else
-CHROMIUM_PACKAGE="chromium-browser"
+CHROMIUM_PACKAGE=""
 
-if ! apt-cache show chromium-browser > /dev/null 2>&1; then
-CHROMIUM_PACKAGE="chromium"
+for candidate in chromium-browser chromium; do
+if apt-cache show "$candidate" > /dev/null 2>&1; then
+CHROMIUM_PACKAGE="$candidate"
+break
+fi
+done
+
+if [ -z "$CHROMIUM_PACKAGE" ]; then
+failed "chromium package is not available"
 fi
 
-CHROMIUM_PKGS=(
+CHROMIUM_RUNTIME_PKGS=(
 "${CHROMIUM_PACKAGE}"
+ca-certificates
 fonts-freefont-ttf
 libnss3
-libatk-bridge2.0-0
-libx11-xcb1
-libxcb-dri3-0
-libxcomposite1
-libxdamage1
-libxrandr2
-libgbm1
-libasound2
-libpangocairo-1.0-0
-libatk1.0-0
-libcups2
-libdrm2
-libxfixes3
-libxkbcommon0
-libxshmfence1
+libfreetype6
+libharfbuzz0b
+libstdc++6
 )
 
-sudo apt install -y "${CHROMIUM_PKGS[@]}" > /dev/null
+sudo apt install -y "${CHROMIUM_RUNTIME_PKGS[@]}" > /dev/null
 
 changed "chromium installed"
 fi
