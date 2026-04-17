@@ -241,6 +241,74 @@ test("waitForCompletion can fetch final result on completion", async () => {
   assert.equal(requestCount, 2);
 });
 
+test("waitForCompletion retries when /result is temporarily null", async () => {
+  const { CrawlixClient } = await import(distModuleUrl);
+  let resultRequestCount = 0;
+
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+
+    if (href.endsWith("/jobs/job_4_race")) {
+      return new Response(
+        JSON.stringify({
+          jobId: "job_4_race",
+          status: "completed",
+          progress: 100,
+          stage: "completed",
+          url: "https://example.com",
+          strategy: "auto",
+          requestedAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:04.000Z",
+          fingerprint: "abc",
+          options: {},
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    if (href.endsWith("/jobs/job_4_race/result")) {
+      resultRequestCount += 1;
+      if (resultRequestCount === 1) {
+        return new Response("null", {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          jobId: "job_4_race",
+          status: "completed",
+          progress: 100,
+          stage: "completed",
+          url: "https://example.com",
+          strategy: "auto",
+          requestedAt: "2026-01-01T00:00:00.000Z",
+          completedAt: "2026-01-01T00:00:05.000Z",
+          preview: "ok-after-retry",
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }
+
+    throw new Error(`Unexpected URL: ${href}`);
+  };
+
+  const client = new CrawlixClient({
+    baseUrl: "https://api.example.com",
+    apiKey: "cx_test",
+  });
+
+  const result = await client.waitForCompletion("job_4_race", {
+    intervalMs: 1,
+    timeoutMs: 5000,
+    fetchResultOnCompleted: true,
+  });
+
+  assert.equal(result.preview, "ok-after-retry");
+  assert.equal(resultRequestCount >= 2, true);
+});
+
 test("waitForCompletion times out", async () => {
   const { CrawlixClient, CrawlixPollingTimeoutError } = await import(
     distModuleUrl

@@ -206,6 +206,12 @@ function isTerminalStatus(status: string): boolean {
   return TERMINAL_STATUSES.has(status);
 }
 
+function isJobResultLike(value: unknown): value is JobResult {
+  return Boolean(
+    value && typeof value === "object" && "jobId" in value && "status" in value,
+  );
+}
+
 export class CrawlixClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -304,8 +310,28 @@ export class CrawlixClient {
       pollCount += 1;
       if (isTerminalStatus(job.status)) {
         if (job.status === "completed" && options.fetchResultOnCompleted) {
-          const terminal = await this.getJobResult(jobId, options.signal);
-          return { terminal, pollCount };
+          while (true) {
+            const maybeResult = await this.request<JobResult | null>(
+              "GET",
+              `/jobs/${jobId}/result`,
+              { signal: options.signal },
+            );
+
+            if (isJobResultLike(maybeResult)) {
+              return { terminal: maybeResult, pollCount };
+            }
+
+            if (Date.now() - startedAt >= timeoutMs) {
+              throw new CrawlixPollingTimeoutError();
+            }
+
+            const elapsedForResult = Date.now() - startedAt;
+            const nextResultIntervalMs =
+              pollingMode === "adaptive"
+                ? resolveAdaptiveInterval(elapsedForResult, adaptiveIntervals)
+                : intervalMs;
+            await sleep(nextResultIntervalMs, options.signal);
+          }
         }
 
         return { terminal: job, pollCount };
