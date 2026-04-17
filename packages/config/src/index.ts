@@ -33,6 +33,7 @@ export interface ApiRuntimeConfig {
 export interface WorkerRuntimeConfig {
   serviceName: string;
   port: number;
+  processingWatchdogTimeoutMs: number;
   queue: QueueConfig;
   redis: RedisConfig;
   scraper: ScraperRuntimeConfig;
@@ -297,6 +298,10 @@ export function validateWorkerRuntimeConfig(
     ...config,
     serviceName: assertNonEmpty(config.serviceName, "WORKER_SERVICE_NAME"),
     port: assertPositiveInteger(config.port, "WORKER_PORT"),
+    processingWatchdogTimeoutMs: assertPositiveInteger(
+      config.processingWatchdogTimeoutMs,
+      "WORKER_PROCESSING_WATCHDOG_TIMEOUT_MS",
+    ),
     queue: validateQueueConfig(config.queue),
     redis: validateRedisConfig(config.redis),
     scraper: validateScraperConfig(config.scraper),
@@ -397,6 +402,10 @@ export function getWorkerRuntimeConfig(
   return {
     serviceName: env.WORKER_SERVICE_NAME ?? "crawlix-worker",
     port: Number(env.PORT ?? readPort(env, "WORKER_PORT", 3002)),
+    processingWatchdogTimeoutMs: readNumber(
+      env.WORKER_PROCESSING_WATCHDOG_TIMEOUT_MS,
+      5 * 60 * 1000,
+    ),
     queue: readQueueConfig(env),
     redis: readRedisConfig(env),
     scraper: readScraperConfig(env),

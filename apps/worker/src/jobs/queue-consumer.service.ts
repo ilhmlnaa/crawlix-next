@@ -68,6 +68,31 @@ export class QueueConsumerService
     };
   }
 
+  private async processWithWatchdog(payload: ScrapeJobMessage): Promise<void> {
+    let timeoutHandle: NodeJS.Timeout | null = null;
+    const config = getWorkerRuntimeConfig();
+    const watchdogTimeoutMs = config.processingWatchdogTimeoutMs;
+
+    try {
+      await Promise.race([
+        this.processor.process(payload),
+        new Promise<never>((_, reject) => {
+          timeoutHandle = setTimeout(() => {
+            reject(
+              new Error(
+                `Job processing watchdog timeout after ${watchdogTimeoutMs}ms.`,
+              ),
+            );
+          }, watchdogTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+      }
+    }
+  }
+
   async onApplicationBootstrap() {
     const config = getWorkerRuntimeConfig();
     let connection: ChannelModel;
@@ -129,8 +154,46 @@ export class QueueConsumerService
       return;
     }
 
-    const payload = JSON.parse(message.content.toString()) as ScrapeJobMessage;
     const config = getWorkerRuntimeConfig();
+    let payload: ScrapeJobMessage;
+
+    try {
+      payload = JSON.parse(message.content.toString()) as ScrapeJobMessage;
+    } catch (error) {
+      const parseError =
+        error instanceof Error ? error.message : 'Invalid JSON payload';
+      const rawBody = message.content.toString();
+
+      this.channel.sendToQueue(
+        config.queue.deadLetterQueueName,
+        Buffer.from(
+          JSON.stringify({
+            deadLetterReason: `Malformed queue payload: ${parseError}`,
+            rawBody,
+            routingKey: message.fields?.routingKey,
+            receivedAt: new Date().toISOString(),
+          }),
+        ),
+        {
+          persistent: true,
+          headers: {
+            'x-dead-letter-reason': 'malformed-payload',
+          },
+        },
+      );
+
+      this.channel.ack(message);
+      this.logger.error(
+        JSON.stringify({
+          event: 'queue.message.malformed',
+          workerId: this.workerHeartbeat.getWorkerId(),
+          queueName: message.fields?.routingKey ?? config.queue.queueName,
+          error: parseError,
+        }),
+      );
+      return;
+    }
+
     const currentAttempt =
       Number(message.properties.headers?.['x-delivery-attempt'] ?? 1) ||
       payload.deliveryAttempt ||
@@ -150,7 +213,7 @@ export class QueueConsumerService
     );
 
     try {
-      await this.processor.process(payload);
+      await this.processWithWatchdog(payload);
       this.channel.ack(message);
       this.logger.log(
         JSON.stringify({

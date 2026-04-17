@@ -27,4 +27,7 @@ export function logWorkerBootstrapSummary(config: WorkerRuntimeConfig) {
   logger.log(
     `queue=${config.queue.queueName} retry=${config.queue.retryQueueName} dlq=${config.queue.deadLetterQueueName} retryDelayMs=${config.queue.retryDelayMs} maxAttempts=${config.queue.maxDeliveryAttempts}`,
   );
+  logger.log(
+    `processingWatchdogTimeoutMs=${config.processingWatchdogTimeoutMs}`,
+  );
 }
