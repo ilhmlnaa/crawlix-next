@@ -108,6 +108,8 @@ const DEFAULT_HEADERS = {
   "Upgrade-Insecure-Requests": "1",
 };
 
+const PLAYWRIGHT_WAIT_TIMEOUT_CAP_MS = 10_000;
+
 function readConfig(
   context?: ScrapeExecutionContext,
 ): Required<ScrapeExecutionContext> {
@@ -141,7 +143,9 @@ function readTimeout(
   options: ScrapeJobOptions,
   config: ScraperRuntimeConfig,
 ): number {
-  return options.timeoutMs ?? config.defaultTimeoutMs;
+  return options.timeoutMs && options.timeoutMs > 0
+    ? options.timeoutMs
+    : config.defaultTimeoutMs;
 }
 
 function resolveProxyUrl(
@@ -441,7 +445,15 @@ async function maybeWaitForSelector(
   timeoutMs?: number,
 ) {
   if (selector) {
-    await page.waitForSelector(selector, { timeout: timeoutMs });
+    const effectiveTimeoutMs = Math.max(
+      1,
+      Math.min(
+        timeoutMs ?? PLAYWRIGHT_WAIT_TIMEOUT_CAP_MS,
+        PLAYWRIGHT_WAIT_TIMEOUT_CAP_MS,
+      ),
+    );
+
+    await page.waitForSelector(selector, { timeout: effectiveTimeoutMs });
   }
 }
 
@@ -451,7 +463,15 @@ async function maybeWaitForFunction(
   timeoutMs?: number,
 ) {
   if (fn) {
-    await page.waitForFunction(fn, { timeout: timeoutMs });
+    const effectiveTimeoutMs = Math.max(
+      1,
+      Math.min(
+        timeoutMs ?? PLAYWRIGHT_WAIT_TIMEOUT_CAP_MS,
+        PLAYWRIGHT_WAIT_TIMEOUT_CAP_MS,
+      ),
+    );
+
+    await page.waitForFunction(fn, { timeout: effectiveTimeoutMs });
   }
 }
 

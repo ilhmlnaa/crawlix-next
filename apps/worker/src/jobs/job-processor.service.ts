@@ -239,6 +239,18 @@ export class JobProcessorService implements OnModuleDestroy {
       };
 
       if (result.status !== 'completed') {
+        await this.jobStore.updateStatus(
+          job.jobId,
+          result.status,
+          result.error,
+        );
+        await this.jobStore.updateProgress(
+          job.jobId,
+          100,
+          'completed',
+          result.error,
+        );
+        await this.jobStore.saveResult(result);
         throw new Error(
           result.error ?? 'Scrape job did not complete successfully.',
         );

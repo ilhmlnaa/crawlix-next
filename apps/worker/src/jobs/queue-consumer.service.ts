@@ -129,7 +129,7 @@ export class QueueConsumerService
     await channel.assertQueue(targetedQueues.deadLetterQueueName, {
       durable: true,
     });
-    await channel.prefetch(1);
+    await channel.prefetch(config.workerConcurrency);
 
     await channel.consume(
       config.queue.queueName,

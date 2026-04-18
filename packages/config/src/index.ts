@@ -35,6 +35,7 @@ export interface WorkerRuntimeConfig {
   serviceName: string;
   port: number;
   processingWatchdogTimeoutMs: number;
+  workerConcurrency: number;
   queue: QueueConfig;
   redis: RedisConfig;
   scraper: ScraperRuntimeConfig;
@@ -307,6 +308,10 @@ export function validateWorkerRuntimeConfig(
       config.processingWatchdogTimeoutMs,
       "WORKER_PROCESSING_WATCHDOG_TIMEOUT_MS",
     ),
+    workerConcurrency: assertPositiveInteger(
+      config.workerConcurrency,
+      "WORKER_CONCURRENCY",
+    ),
     queue: validateQueueConfig(config.queue),
     redis: validateRedisConfig(config.redis),
     scraper: validateScraperConfig(config.scraper),
@@ -412,6 +417,7 @@ export function getWorkerRuntimeConfig(
       env.WORKER_PROCESSING_WATCHDOG_TIMEOUT_MS,
       5 * 60 * 1000,
     ),
+    workerConcurrency: readNumber(env.WORKER_CONCURRENCY, 2),
     queue: readQueueConfig(env),
     redis: readRedisConfig(env),
     scraper: readScraperConfig(env),
