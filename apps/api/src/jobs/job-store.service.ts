@@ -13,6 +13,21 @@ import {
 } from '@repo/shared';
 import { RedisService } from '../infrastructure/redis.service';
 
+const MAX_INDEXED_JOBS = 1000;
+
+type JobStatusCounts = Record<ScrapeJobStatus, number>;
+
+function createEmptyStatusCounts(): JobStatusCounts {
+  return {
+    queued: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0,
+    cancelled: 0,
+    timeout: 0,
+  };
+}
+
 @Injectable()
 export class JobStoreService {
   constructor(private readonly redisService: RedisService) {}
@@ -41,7 +56,7 @@ export class JobStoreService {
     await client.set(keys.record, JSON.stringify(record));
     await client.lrem(this.indexKey, 0, record.jobId);
     await client.lpush(this.indexKey, record.jobId);
-    await client.ltrim(this.indexKey, 0, 49);
+    await client.ltrim(this.indexKey, 0, MAX_INDEXED_JOBS - 1);
   }
 
   async saveResult(result: ScrapeJobResult): Promise<void> {
@@ -146,15 +161,89 @@ export class JobStoreService {
     return updated;
   }
 
-  async listRecords(limit = 20): Promise<ScrapeJobRecord[]> {
+  async listRecords(limit = 20, offset = 0): Promise<ScrapeJobRecord[]> {
     const client = this.redisService.getClient();
     await client.connect().catch(() => undefined);
-    const jobIds = await client.lrange(this.indexKey, 0, limit - 1);
-    const records = await Promise.all(
-      jobIds.map((jobId) => this.getRecord(jobId)),
+    const safeLimit = Math.max(1, Math.floor(limit));
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const jobIds = await client.lrange(
+      this.indexKey,
+      safeOffset,
+      safeOffset + safeLimit - 1,
     );
-    return records.filter((record): record is ScrapeJobRecord =>
-      Boolean(record),
-    );
+    if (jobIds.length === 0) {
+      return [];
+    }
+
+    const recordKeys = jobIds.map((jobId) => this.getKeys(jobId).record);
+    const rawRecords = await client.mget(recordKeys);
+
+    return rawRecords
+      .map((value) => {
+        if (!value) {
+          return null;
+        }
+
+        try {
+          return JSON.parse(value) as ScrapeJobRecord;
+        } catch {
+          return null;
+        }
+      })
+      .filter((record): record is ScrapeJobRecord => Boolean(record));
+  }
+
+  async countRecords(): Promise<number> {
+    const client = this.redisService.getClient();
+    await client.connect().catch(() => undefined);
+    return client.llen(this.indexKey);
+  }
+
+  async getOverviewData(recentLimit = 50): Promise<{
+    recentJobs: ScrapeJobRecord[];
+    total: number;
+    statusCounts: JobStatusCounts;
+  }> {
+    const client = this.redisService.getClient();
+    await client.connect().catch(() => undefined);
+
+    const safeRecentLimit = Math.max(1, Math.floor(recentLimit));
+    const jobIds = await client.lrange(this.indexKey, 0, -1);
+    const total = jobIds.length;
+
+    if (total === 0) {
+      return {
+        recentJobs: [],
+        total: 0,
+        statusCounts: createEmptyStatusCounts(),
+      };
+    }
+
+    const recordKeys = jobIds.map((jobId) => this.getKeys(jobId).record);
+    const rawRecords = await client.mget(recordKeys);
+    const statusCounts = createEmptyStatusCounts();
+    const recentJobs: ScrapeJobRecord[] = [];
+
+    rawRecords.forEach((value) => {
+      if (!value) {
+        return;
+      }
+
+      try {
+        const record = JSON.parse(value) as ScrapeJobRecord;
+        statusCounts[record.status] += 1;
+        if (recentJobs.length < safeRecentLimit) {
+          recentJobs.push(record);
+        }
+      } catch {
+        // Ignore malformed records to keep overview endpoint resilient.
+      }
+    });
+
+    return {
+      recentJobs,
+      total,
+      statusCounts,
+    };
   }
 }

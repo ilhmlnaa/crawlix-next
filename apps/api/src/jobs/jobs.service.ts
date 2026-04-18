@@ -5,6 +5,7 @@ import {
   type CreateScrapeJobInput,
   type EnqueueJobResponse,
   type JobsDashboardSnapshot,
+  type JobsPageSnapshot,
   type JobsOverviewSnapshot,
   type ScrapeJobMessage,
   type ScrapeJobRecord,
@@ -15,6 +16,9 @@ import { JobStoreService } from './job-store.service';
 import { QueuePublisherService } from '../infrastructure/queue-publisher.service';
 import { WorkerRegistryService } from './worker-registry.service';
 import { WebhookEventService } from './webhook-event.service';
+
+const MAX_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 25;
 
 @Injectable()
 export class JobsService {
@@ -221,9 +225,43 @@ export class JobsService {
     };
   }
 
+  async getPaginatedJobs(
+    pageInput?: number,
+    pageSizeInput?: number,
+  ): Promise<JobsPageSnapshot> {
+    const page =
+      Number.isInteger(pageInput) && (pageInput as number) > 0
+        ? (pageInput as number)
+        : 1;
+    const pageSize =
+      Number.isInteger(pageSizeInput) && (pageSizeInput as number) > 0
+        ? Math.min(pageSizeInput as number, MAX_PAGE_SIZE)
+        : DEFAULT_PAGE_SIZE;
+
+    const offset = (page - 1) * pageSize;
+    const [total, jobs] = await Promise.all([
+      this.jobStore.countRecords(),
+      this.jobStore.listRecords(pageSize, offset),
+    ]);
+
+    const totalPages = total > 0 ? Math.ceil(total / pageSize) : 1;
+
+    return {
+      jobs,
+      page,
+      pageSize,
+      total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
+  }
+
   async getOverviewSnapshot(): Promise<JobsOverviewSnapshot> {
-    const recentJobs = await this.jobStore.listRecords(50);
-    const workers = await this.workerRegistry.listWorkers();
+    const [{ recentJobs, total, statusCounts }, workers] = await Promise.all([
+      this.jobStore.getOverviewData(50),
+      this.workerRegistry.listWorkers(),
+    ]);
     const config = getApiRuntimeConfig();
     const queueStats = await this.publisher.getQueueStats().catch(() => ({
       messageCount: 0,
@@ -235,26 +273,9 @@ export class JobsService {
       webhookDeadLetterMessageCount: 0,
     }));
 
-    const statusCounts = recentJobs.reduce<
-      JobsOverviewSnapshot['statusCounts']
-    >(
-      (accumulator, job) => {
-        accumulator[job.status] += 1;
-        return accumulator;
-      },
-      {
-        queued: 0,
-        processing: 0,
-        completed: 0,
-        failed: 0,
-        cancelled: 0,
-        timeout: 0,
-      },
-    );
-
     return {
       queueName: config.queue.queueName,
-      total: recentJobs.length,
+      total,
       statusCounts,
       queueDepth: queueStats.messageCount,
       consumerCount: queueStats.consumerCount,

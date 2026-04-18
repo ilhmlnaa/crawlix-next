@@ -5,6 +5,7 @@ import {
   Headers,
   Param,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { SessionAuthGuard } from '../auth/guards/session-auth.guard';
@@ -44,8 +45,10 @@ export class JobsController {
 
   @Get()
   @UseGuards(SessionAuthGuard)
-  list() {
-    return this.jobsService.getDashboardSnapshot();
+  list(@Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    const parsedPage = page ? Number.parseInt(page, 10) : undefined;
+    const parsedPageSize = pageSize ? Number.parseInt(pageSize, 10) : undefined;
+    return this.jobsService.getPaginatedJobs(parsedPage, parsedPageSize);
   }
 
   @Get('overview')

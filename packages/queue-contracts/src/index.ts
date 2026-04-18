@@ -134,6 +134,16 @@ export interface JobsDashboardSnapshot {
   total: number;
 }
 
+export interface JobsPageSnapshot {
+  jobs: ScrapeJobRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
 export interface WorkerHeartbeat {
   workerId: string;
   serviceName: string;

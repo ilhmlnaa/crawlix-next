@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   CheckSquare,
@@ -15,6 +15,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import type {
+  JobsPageSnapshot,
   ScrapeJobRecord,
   ScrapeJobResult,
   WorkerHeartbeat,
@@ -99,18 +100,57 @@ export function JobsPage() {
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pagedJobs, setPagedJobs] = useState<ScrapeJobRecord[]>([]);
+  const [jobsPage, setJobsPage] = useState(1);
+  const [totalJobs, setTotalJobs] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const pageSize = 25;
+
+  const loadJobs = useCallback(async () => {
+    setLoadingJobs(true);
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/jobs?page=${jobsPage}&pageSize=${pageSize}`,
+        {
+          credentials: "include",
+        },
+      );
+
+      if (!response.ok) {
+        setPagedJobs([]);
+        setTotalJobs(0);
+        setTotalPages(1);
+        return;
+      }
+
+      const data = (await response.json()) as JobsPageSnapshot;
+      setPagedJobs(data.jobs ?? []);
+      setTotalJobs(data.total ?? 0);
+      setTotalPages(Math.max(data.totalPages ?? 1, 1));
+    } catch {
+      setPagedJobs([]);
+      setTotalJobs(0);
+      setTotalPages(1);
+    } finally {
+      setLoadingJobs(false);
+    }
+  }, [apiBaseUrl, jobsPage]);
+
+  useEffect(() => {
+    void loadJobs();
+  }, [loadJobs]);
 
   const jobs = useMemo(() => {
-    if (!searchQuery) return overview?.recentJobs ?? [];
-    return (overview?.recentJobs ?? []).filter(
+    if (!searchQuery) return pagedJobs;
+    return pagedJobs.filter(
       (j) =>
         j.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
         j.jobId.toLowerCase().includes(searchQuery.toLowerCase()),
     );
-  }, [overview?.recentJobs, searchQuery]);
+  }, [pagedJobs, searchQuery]);
 
-  const selectedJob =
-    overview?.recentJobs.find((j) => j.jobId === selectedJobId) ?? null;
+  const selectedJob = pagedJobs.find((j) => j.jobId === selectedJobId) ?? null;
 
   const proxyEnabled =
     selectedResult?.proxyEnabled ??
@@ -244,11 +284,13 @@ export function JobsPage() {
   const onRetry = async (id: string) => {
     setRetryingJobId(id);
     await handleRetry(id);
+    await loadJobs();
     setRetryingJobId(null);
   };
   const onCancel = async (id: string) => {
     setCancellingJobId(id);
     await handleCancel(id);
+    await loadJobs();
     setCancellingJobId(null);
   };
 
@@ -270,7 +312,7 @@ export function JobsPage() {
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-white text-lg">Job Queue</h3>
             <Badge className="bg-[#1a2235] text-slate-500 border-[#334155] font-mono text-[10px]">
-              {jobs.length} Items
+              {totalJobs} Items
             </Badge>
           </div>
           <div className="relative">
@@ -287,6 +329,11 @@ export function JobsPage() {
 
         <ScrollArea className="min-h-0 flex-1">
           <div className="p-2 space-y-1">
+            {loadingJobs && (
+              <div className="px-4 py-3 text-xs text-slate-500">
+                Loading jobs...
+              </div>
+            )}
             {jobs.length === 0 && (
               <div className="py-20 text-center text-slate-600">
                 <Rabbit className="size-12 mx-auto mb-4 opacity-10" />
@@ -338,6 +385,34 @@ export function JobsPage() {
             ))}
           </div>
         </ScrollArea>
+
+        <div className="flex items-center justify-between gap-3 border-t border-[#1a2235] p-3">
+          <p className="text-[11px] text-slate-500">
+            Page {jobsPage} / {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={jobsPage <= 1 || loadingJobs}
+              onClick={() => setJobsPage((prev) => Math.max(1, prev - 1))}
+              className="border-[#334155] bg-transparent text-slate-300 hover:bg-[#131b2c]"
+            >
+              Prev
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={jobsPage >= totalPages || loadingJobs}
+              onClick={() =>
+                setJobsPage((prev) => Math.min(totalPages, prev + 1))
+              }
+              className="border-[#334155] bg-transparent text-slate-300 hover:bg-[#131b2c]"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Details Container */}
