@@ -16,6 +16,7 @@ export interface RedisConfig {
   url: string;
   jobPrefix: string;
   resultTtlSeconds: number;
+  jobIndexMaxRecords: number;
 }
 
 export interface ApiRuntimeConfig {
@@ -190,6 +191,10 @@ function validateRedisConfig(config: RedisConfig): RedisConfig {
       config.resultTtlSeconds,
       "RESULT_TTL_SECONDS",
     ),
+    jobIndexMaxRecords: assertPositiveInteger(
+      config.jobIndexMaxRecords,
+      "REDIS_JOB_INDEX_MAX_RECORDS",
+    ),
   };
 }
 
@@ -325,6 +330,7 @@ function readRedisConfig(env: NodeJS.ProcessEnv): RedisConfig {
     url: env.REDIS_URL ?? "redis://localhost:6379",
     jobPrefix: env.REDIS_JOB_PREFIX ?? "crawlix:jobs",
     resultTtlSeconds: readNumber(env.RESULT_TTL_SECONDS, 3600),
+    jobIndexMaxRecords: readNumber(env.REDIS_JOB_INDEX_MAX_RECORDS, 1000),
   };
 }
 

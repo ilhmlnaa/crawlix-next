@@ -48,7 +48,11 @@ export class JobStoreService {
     await client.set(keys.record, JSON.stringify(record));
     await client.lrem(this.indexKey, 0, record.jobId);
     await client.lpush(this.indexKey, record.jobId);
-    await client.ltrim(this.indexKey, 0, 49);
+    await client.ltrim(
+      this.indexKey,
+      0,
+      this.config.redis.jobIndexMaxRecords - 1,
+    );
   }
 
   async patchRecord(
