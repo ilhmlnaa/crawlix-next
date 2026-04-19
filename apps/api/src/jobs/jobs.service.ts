@@ -258,11 +258,11 @@ export class JobsService {
   }
 
   async getOverviewSnapshot(): Promise<JobsOverviewSnapshot> {
+    const config = getApiRuntimeConfig();
     const [{ recentJobs, total, statusCounts }, workers] = await Promise.all([
-      this.jobStore.getOverviewData(50),
+      this.jobStore.getOverviewData(config.redis.jobIndexMaxRecords),
       this.workerRegistry.listWorkers(),
     ]);
-    const config = getApiRuntimeConfig();
     const queueStats = await this.publisher.getQueueStats().catch(() => ({
       messageCount: 0,
       consumerCount: 0,

@@ -81,6 +81,10 @@ export function OverviewPage() {
     (w) => w.status === "processing",
   ).length;
   const totalWorkers = overview?.workers?.length ?? 0;
+  const recentJobs = useMemo(
+    () => overview?.recentJobs ?? [],
+    [overview?.recentJobs],
+  );
 
   const systemLoad = useMemo(() => {
     if (!overview) return "—";
@@ -96,29 +100,78 @@ export function OverviewPage() {
 
   const chartData = useMemo(() => {
     const msPerDay = 86_400_000;
-    const grouped: Record<
-      string,
-      { name: string; dispatched: number; completed: number }
-    > = {};
+    const formatDayKey = (date: Date) =>
+      `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    const formatDayLabel = (date: Date) =>
+      `${date.toLocaleString("default", { month: "short" })} ${date.getDate()}`;
 
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(Date.now() - i * msPerDay);
-      const name = `${d.toLocaleString("default", { month: "short" })} ${d.getDate()}`;
-      grouped[name] = { name, dispatched: 0, completed: 0 };
+    if (recentJobs.length === 0) {
+      const grouped: Record<
+        string,
+        { name: string; dispatched: number; completed: number; failed: number }
+      > = {};
+
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(Date.now() - i * msPerDay);
+        const dateKey = formatDayKey(date);
+        grouped[dateKey] = {
+          name: formatDayLabel(date),
+          dispatched: 0,
+          completed: 0,
+          failed: 0,
+        };
+      }
+
+      return Object.values(grouped);
     }
 
-    overview?.recentJobs?.forEach((job) => {
-      const d = new Date(job.updatedAt || job.requestedAt);
-      const name = `${d.toLocaleString("default", { month: "short" })} ${d.getDate()}`;
-      const entry = grouped[name];
+    const timestamps = recentJobs
+      .map((job) => new Date(job.updatedAt || job.requestedAt).getTime())
+      .filter((timestamp) => !Number.isNaN(timestamp));
+
+    if (timestamps.length === 0) {
+      return [];
+    }
+
+    const start = new Date(Math.min(...timestamps));
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(Math.max(...timestamps));
+    end.setHours(0, 0, 0, 0);
+
+    const grouped = new Map<
+      string,
+      { name: string; dispatched: number; completed: number; failed: number }
+    >();
+
+    for (
+      let cursor = new Date(start);
+      cursor <= end;
+      cursor = new Date(cursor.getTime() + msPerDay)
+    ) {
+      const dateKey = formatDayKey(cursor);
+      grouped.set(dateKey, {
+        name: formatDayLabel(cursor),
+        dispatched: 0,
+        completed: 0,
+        failed: 0,
+      });
+    }
+
+    recentJobs.forEach((job) => {
+      const date = new Date(job.updatedAt || job.requestedAt);
+      if (Number.isNaN(date.getTime())) return;
+
+      const key = formatDayKey(date);
+      const entry = grouped.get(key);
       if (entry) {
         entry.dispatched += 1;
         if (job.status === "completed") entry.completed += 1;
+        if (job.status === "failed") entry.failed += 1;
       }
     });
 
-    return Object.values(grouped);
-  }, [overview?.recentJobs]);
+    return Array.from(grouped.values());
+  }, [recentJobs]);
 
   const recentActivity = overview?.recentJobs?.slice(0, 5) ?? [];
 
@@ -328,6 +381,9 @@ export function OverviewPage() {
                   <div className="size-2 rounded-full bg-emerald-500" />{" "}
                   Completed
                 </span>
+                <span className="flex items-center gap-1.5 text-slate-400">
+                  <div className="size-2 rounded-full bg-rose-500" /> Failed
+                </span>
               </div>
             </div>
             <div className="h-60 w-full">
@@ -385,6 +441,13 @@ export function OverviewPage() {
                     stroke="#10b981"
                     strokeWidth={3}
                     fill="url(#gradCompleted)"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="failed"
+                    stroke="#f43f5e"
+                    strokeWidth={3}
+                    fill="none"
                   />
                 </AreaChart>
               </ResponsiveContainer>
