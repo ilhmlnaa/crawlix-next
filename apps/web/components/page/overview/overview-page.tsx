@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AreaChart,
   Area,
+  CartesianGrid,
   XAxis,
   YAxis,
   Tooltip,
@@ -29,6 +30,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useDashboardSession } from "@/components/page/dashboard/session-provider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const QUICK_ACTIONS = [
@@ -69,8 +77,21 @@ const QUICK_ACTIONS = [
   },
 ];
 
+type QueueChartTimeframe = "hour" | "12h" | "day";
+
+const QUEUE_CHART_TIMEFRAMES: Array<{
+  value: QueueChartTimeframe;
+  label: string;
+}> = [
+  { value: "hour", label: "Hourly" },
+  { value: "12h", label: "Every 12 Hours" },
+  { value: "day", label: "Daily" },
+];
+
 export function OverviewPage() {
   const { overview, refreshing, handleRefresh } = useDashboardSession();
+  const [queueChartTimeframe, setQueueChartTimeframe] =
+    useState<QueueChartTimeframe>("day");
 
   const totalJobs = overview?.total ?? 0;
   const completed = overview?.statusCounts?.completed ?? 0;
@@ -86,6 +107,52 @@ export function OverviewPage() {
     [overview?.recentJobs],
   );
 
+  const queueChartSettings = useMemo(() => {
+    switch (queueChartTimeframe) {
+      case "hour":
+        return {
+          bucketMs: 3_600_000,
+          lookbackMs: 24 * 3_600_000,
+          axisFormat: { hour: "numeric" as const, minute: "2-digit" as const },
+          fullFormat: {
+            weekday: "short" as const,
+            month: "short" as const,
+            day: "numeric" as const,
+            year: "numeric" as const,
+            hour: "numeric" as const,
+            minute: "2-digit" as const,
+          },
+        };
+      case "12h":
+        return {
+          bucketMs: 12 * 3_600_000,
+          lookbackMs: 7 * 86_400_000,
+          axisFormat: { hour: "numeric" as const },
+          fullFormat: {
+            weekday: "short" as const,
+            month: "short" as const,
+            day: "numeric" as const,
+            year: "numeric" as const,
+            hour: "numeric" as const,
+            minute: "2-digit" as const,
+          },
+        };
+      case "day":
+      default:
+        return {
+          bucketMs: 86_400_000,
+          lookbackMs: 30 * 86_400_000,
+          axisFormat: { month: "short" as const, day: "numeric" as const },
+          fullFormat: {
+            weekday: "short" as const,
+            month: "short" as const,
+            day: "numeric" as const,
+            year: "numeric" as const,
+          },
+        };
+    }
+  }, [queueChartTimeframe]);
+
   const systemLoad = useMemo(() => {
     if (!overview) return "—";
 
@@ -99,58 +166,52 @@ export function OverviewPage() {
   }, [overview, queueDepth, totalWorkers]);
 
   const chartData = useMemo(() => {
-    const msPerDay = 86_400_000;
-    const formatDayKey = (date: Date) =>
-      `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-    const formatDayLabel = (date: Date) =>
-      `${date.toLocaleString("default", { month: "short" })} ${date.getDate()}`;
-
-    if (recentJobs.length === 0) {
-      const grouped: Record<
-        string,
-        { name: string; dispatched: number; completed: number; failed: number }
-      > = {};
-
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(Date.now() - i * msPerDay);
-        const dateKey = formatDayKey(date);
-        grouped[dateKey] = {
-          name: formatDayLabel(date),
-          dispatched: 0,
-          completed: 0,
-          failed: 0,
-        };
+    const { bucketMs, lookbackMs, axisFormat, fullFormat } = queueChartSettings;
+    const formatBucketKey = (date: Date) => `${date.getTime()}`;
+    const getBucketStart = (date: Date) => {
+      const bucket = new Date(date);
+      if (queueChartTimeframe === "hour") {
+        bucket.setMinutes(0, 0, 0);
+      } else if (queueChartTimeframe === "12h") {
+        bucket.setMinutes(0, 0, 0);
+        bucket.setHours(bucket.getHours() < 12 ? 0 : 12);
+      } else {
+        bucket.setHours(0, 0, 0, 0);
       }
+      return bucket;
+    };
+    const formatAxisLabel = (date: Date) =>
+      date.toLocaleString("en-US", axisFormat);
+    const formatTooltipLabel = (date: Date) =>
+      date.toLocaleString("en-US", fullFormat);
 
-      return Object.values(grouped);
-    }
-
-    const timestamps = recentJobs
-      .map((job) => new Date(job.updatedAt || job.requestedAt).getTime())
-      .filter((timestamp) => !Number.isNaN(timestamp));
-
-    if (timestamps.length === 0) {
-      return [];
-    }
-
-    const start = new Date(Math.min(...timestamps));
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(Math.max(...timestamps));
-    end.setHours(0, 0, 0, 0);
+    const endPoint = new Date();
+    const startPoint = new Date(endPoint.getTime() - lookbackMs);
+    const startBucket = getBucketStart(startPoint);
+    const endBucket = getBucketStart(endPoint);
 
     const grouped = new Map<
       string,
-      { name: string; dispatched: number; completed: number; failed: number }
+      {
+        timeKey: string;
+        name: string;
+        fullDate: string;
+        dispatched: number;
+        completed: number;
+        failed: number;
+      }
     >();
 
     for (
-      let cursor = new Date(start);
-      cursor <= end;
-      cursor = new Date(cursor.getTime() + msPerDay)
+      let cursor = new Date(startBucket);
+      cursor <= endBucket;
+      cursor = new Date(cursor.getTime() + bucketMs)
     ) {
-      const dateKey = formatDayKey(cursor);
+      const dateKey = formatBucketKey(cursor);
       grouped.set(dateKey, {
-        name: formatDayLabel(cursor),
+        timeKey: dateKey,
+        name: formatAxisLabel(cursor),
+        fullDate: formatTooltipLabel(cursor),
         dispatched: 0,
         completed: 0,
         failed: 0,
@@ -161,7 +222,7 @@ export function OverviewPage() {
       const date = new Date(job.updatedAt || job.requestedAt);
       if (Number.isNaN(date.getTime())) return;
 
-      const key = formatDayKey(date);
+      const key = formatBucketKey(getBucketStart(date));
       const entry = grouped.get(key);
       if (entry) {
         entry.dispatched += 1;
@@ -171,12 +232,18 @@ export function OverviewPage() {
     });
 
     return Array.from(grouped.values());
-  }, [recentJobs]);
+  }, [queueChartSettings, queueChartTimeframe, recentJobs]);
 
   const recentActivity = overview?.recentJobs?.slice(0, 5) ?? [];
 
   return (
-    <div className="w-full min-w-0 space-y-8 pb-10">
+    <div className="relative w-full min-w-0 space-y-8 pb-10 z-0">
+      {/* Decorative Top-Right Grid Background */}
+      <div className="fixed right-0 top-0 h-screen w-screen pointer-events-none -z-50 overflow-hidden">
+        <div className="absolute right-0 top-0 h-full w-[80%] bg-[linear-gradient(to_right,rgba(99,102,241,0.15)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.15)_1px,transparent_1px)] bg-size-[50px_50px] mask-[radial-gradient(ellipse_80%_60%_at_100%_0%,#000_70%,transparent_100%)]" />
+        <div className="absolute right-0 top-0 -translate-y-1/3 translate-x-1/3 h-150 w-150 rounded-full bg-indigo-600/20 blur-[120px]" />
+      </div>
+
       {/* Top Welcome Title */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
@@ -295,245 +362,307 @@ export function OverviewPage() {
         </div>
       </div>
 
-      {/* Main Grid for Cards and Activity */}
-      <div className="grid gap-8 lg:grid-cols-3">
-        {/* Stats Column */}
-        <div className="min-w-0 space-y-8 lg:col-span-2">
-          <div className="grid gap-5 sm:grid-cols-2">
-            {[
-              {
-                label: "Queue Records",
-                value: totalJobs.toLocaleString(),
-                icon: Database,
-                trend: "+12.5%",
-                color: "text-indigo-400",
-                bg: "bg-indigo-500/10",
-              },
-              {
-                label: "Worker Nodes",
-                value: String(activeWorkers),
-                icon: ServerCog,
-                trend: "Live",
-                color: "text-amber-400",
-                bg: "bg-amber-500/10",
-              },
-              {
-                label: "Total Success",
-                value: completed.toLocaleString(),
-                icon: CheckCircle2,
-                trend: "+8.2%",
-                color: "text-emerald-400",
-                bg: "bg-emerald-500/10",
-              },
-              {
-                label: "Fail Incident",
-                value: failed.toLocaleString(),
-                icon: Activity,
-                trend: "-2.1%",
-                color: "text-rose-400",
-                bg: "bg-rose-500/10",
-              },
-            ].map(({ label, value, icon: Icon, trend, color, bg }) => (
-              <div
-                key={label}
-                className="group relative min-w-0 overflow-hidden rounded-2xl border border-[#1a2235] bg-[#0c1220] p-6 transition-all hover:border-indigo-500/30"
-              >
+      {/* Main Content Area */}
+      <div className="space-y-8">
+        {/* Top Row: Stats & Quick Actions */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2">
+            <div className="grid gap-5 sm:grid-cols-2">
+              {[
+                {
+                  label: "Queue Records",
+                  value: totalJobs.toLocaleString(),
+                  icon: Database,
+                  trend: "+12.5%",
+                  color: "text-indigo-400",
+                  bg: "bg-indigo-500/10",
+                },
+                {
+                  label: "Worker Nodes",
+                  value: String(activeWorkers),
+                  icon: ServerCog,
+                  trend: "Live",
+                  color: "text-amber-400",
+                  bg: "bg-amber-500/10",
+                },
+                {
+                  label: "Total Success",
+                  value: completed.toLocaleString(),
+                  icon: CheckCircle2,
+                  trend: "+8.2%",
+                  color: "text-emerald-400",
+                  bg: "bg-emerald-500/10",
+                },
+                {
+                  label: "Fail Incident",
+                  value: failed.toLocaleString(),
+                  icon: Activity,
+                  trend: "-2.1%",
+                  color: "text-rose-400",
+                  bg: "bg-rose-500/10",
+                },
+              ].map(({ label, value, icon: Icon, trend, color, bg }) => (
                 <div
-                  className={cn(
-                    "mb-4 flex h-10 w-10 items-center justify-center rounded-xl",
-                    bg,
-                    color,
-                  )}
+                  key={label}
+                  className="group relative min-w-0 overflow-hidden rounded-2xl border border-[#1a2235] bg-[#0c1220] p-6 transition-all hover:border-indigo-500/30"
                 >
-                  <Icon className="size-5" />
-                </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <h3 className="text-3xl font-bold text-white tracking-tight">
-                    {value}
-                  </h3>
-                  <span
+                  <div
                     className={cn(
-                      "text-xs font-bold",
-                      color.includes("rose")
-                        ? "text-rose-400"
-                        : "text-emerald-400",
+                      "mb-4 flex h-10 w-10 items-center justify-center rounded-xl",
+                      bg,
+                      color,
                     )}
                   >
-                    {trend}
-                  </span>
+                    <Icon className="size-5" />
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-3xl font-bold text-white tracking-tight">
+                      {value}
+                    </h3>
+                    <span
+                      className={cn(
+                        "text-xs font-bold",
+                        color.includes("rose")
+                          ? "text-rose-400"
+                          : "text-emerald-400",
+                      )}
+                    >
+                      {trend}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    {label}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm font-medium text-slate-500">
-                  {label}
-                </p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
-          <div className="rounded-[1.5rem] border border-[#1a2235] bg-[#0c1220] p-6 overflow-hidden">
-            <div className="flex items-center justify-between mb-8">
-              <h3 className="text-lg font-bold text-white">Queue Volume</h3>
-              <div className="flex gap-4 text-xs">
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <div className="size-2 rounded-full bg-indigo-500" />{" "}
-                  Dispatched
-                </span>
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <div className="size-2 rounded-full bg-emerald-500" />{" "}
-                  Completed
-                </span>
-                <span className="flex items-center gap-1.5 text-slate-400">
-                  <div className="size-2 rounded-full bg-rose-500" /> Failed
-                </span>
+          <div className="min-w-0 lg:col-span-1">
+            {/* Quick Actions */}
+            <div className="space-y-4 h-full">
+              <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
+                Control Hub
+              </h3>
+              <div className="grid gap-3">
+                {QUICK_ACTIONS.map(
+                  ({ href, icon: Icon, label, color, iconBg }) => (
+                    <Link
+                      key={href}
+                      href={href}
+                      className="group flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-[#1a2235] bg-[#0c1220] p-4 transition-all hover:border-indigo-500/30 hover:bg-[#131b2c]"
+                    >
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div
+                          className={cn(
+                            "flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110",
+                            iconBg,
+                            color,
+                          )}
+                        >
+                          <Icon className="size-5" />
+                        </div>
+                        <span className="min-w-0 truncate font-bold text-sm text-slate-200">
+                          {label}
+                        </span>
+                      </div>
+                      <ArrowRight className="size-4 text-slate-600 group-hover:text-white transition-all transform group-hover:translate-x-1" />
+                    </Link>
+                  ),
+                )}
               </div>
-            </div>
-            <div className="h-60 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData}>
-                  <defs>
-                    <linearGradient
-                      id="gradCompleted"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient
-                      id="gradDispatched"
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis
-                    dataKey="name"
-                    stroke="#1a2235"
-                    tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }}
-                    tickLine={false}
-                    axisLine={false}
-                    dy={10}
-                  />
-                  <YAxis hide />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#0c1220",
-                      borderColor: "#1a2235",
-                      borderRadius: "12px",
-                      fontSize: 12,
-                    }}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="dispatched"
-                    stroke="#6366f1"
-                    strokeWidth={3}
-                    fill="url(#gradDispatched)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="completed"
-                    stroke="#10b981"
-                    strokeWidth={3}
-                    fill="url(#gradCompleted)"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="failed"
-                    stroke="#f43f5e"
-                    strokeWidth={3}
-                    fill="none"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
             </div>
           </div>
         </div>
 
-        {/* Sidebar Column */}
-        <div className="min-w-0 space-y-8">
-          {/* Quick Actions */}
-          <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500 ml-1">
-              Control Hub
-            </h3>
-            <div className="grid gap-3">
-              {QUICK_ACTIONS.map(
-                ({ href, icon: Icon, label, color, iconBg }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    className="group flex min-w-0 items-center justify-between gap-4 rounded-2xl border border-[#1a2235] bg-[#0c1220] p-4 transition-all hover:border-indigo-500/30 hover:bg-[#131b2c]"
+        {/* Bottom Row: Queue Volume & Live Feed */}
+        <div className="grid gap-8 lg:grid-cols-3">
+          <div className="min-w-0 lg:col-span-2 flex flex-col">
+            <div className="rounded-[1.5rem] border border-[#1a2235] bg-[#0c1220] p-6 flex-1 flex flex-col overflow-hidden">
+              <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Queue Volume</h3>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex gap-4 text-xs">
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <div className="size-2 rounded-full bg-indigo-500" />{" "}
+                      Dispatched
+                    </span>
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <div className="size-2 rounded-full bg-emerald-500" />{" "}
+                      Completed
+                    </span>
+                    <span className="flex items-center gap-1.5 text-slate-400">
+                      <div className="size-2 rounded-full bg-rose-500" /> Failed
+                    </span>
+                  </div>
+                  <Select
+                    value={queueChartTimeframe}
+                    onValueChange={(value) =>
+                      setQueueChartTimeframe(value as QueueChartTimeframe)
+                    }
                   >
-                    <div className="flex min-w-0 items-center gap-4">
-                      <div
-                        className={cn(
-                          "flex h-10 w-10 items-center justify-center rounded-xl transition-transform group-hover:scale-110",
-                          iconBg,
-                          color,
-                        )}
+                    <SelectTrigger className="h-9 rounded-xl border-[#1a2235] bg-[#121828] text-slate-200 sm:w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#1a2235] bg-[#121828] text-slate-200">
+                      {QUEUE_CHART_TIMEFRAMES.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="min-h-60 flex-1 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <CartesianGrid
+                      strokeDasharray="4 4"
+                      stroke="#1a2235"
+                      vertical={false}
+                    />
+                    <defs>
+                      <linearGradient
+                        id="gradCompleted"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
                       >
-                        <Icon className="size-5" />
-                      </div>
-                      <span className="min-w-0 truncate font-bold text-sm text-slate-200">
-                        {label}
-                      </span>
-                    </div>
-                    <ArrowRight className="size-4 text-slate-600 group-hover:text-white transition-all transform group-hover:translate-x-1" />
-                  </Link>
-                ),
-              )}
+                        <stop
+                          offset="5%"
+                          stopColor="#10b981"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#10b981"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                      <linearGradient
+                        id="gradDispatched"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#6366f1"
+                          stopOpacity={0.4}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#6366f1"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="timeKey"
+                      stroke="#1a2235"
+                      tick={{ fill: "#475569", fontSize: 11, fontWeight: 600 }}
+                      tickLine={false}
+                      axisLine={false}
+                      dy={10}
+                      tickFormatter={(value) => {
+                        const entry = chartData.find(
+                          (item) => item.timeKey === value,
+                        );
+                        return entry?.name ?? "";
+                      }}
+                    />
+                    <YAxis hide />
+                    <Tooltip
+                      labelFormatter={(_, payload) => {
+                        const firstItem = payload?.[0] as {
+                          payload?: { fullDate?: string };
+                        };
+                        return firstItem?.payload?.fullDate ?? "";
+                      }}
+                      contentStyle={{
+                        backgroundColor: "#0c1220",
+                        borderColor: "#1a2235",
+                        borderRadius: "12px",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="dispatched"
+                      stroke="#6366f1"
+                      strokeWidth={3}
+                      fill="url(#gradDispatched)"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="completed"
+                      stroke="#10b981"
+                      strokeWidth={3}
+                      fill="url(#gradCompleted)"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="failed"
+                      stroke="#f43f5e"
+                      strokeWidth={3}
+                      fill="none"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
 
-          {/* Recent Table */}
-          <div className="rounded-[1.5rem] border border-[#1a2235] bg-[#0c1220] overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-[#1a2235]">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                Live Feed
-              </h3>
-              <Link
-                href="/jobs"
-                className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest"
-              >
-                History
-              </Link>
-            </div>
-            <div className="divide-y divide-[#1a2235]">
-              {recentActivity.map((job) => (
-                <div
-                  key={job.jobId}
-                  className="group cursor-pointer p-4 transition-colors hover:bg-[#131b2c]"
+          <div className="min-w-0 lg:col-span-1 flex flex-col">
+            {/* Recent Table */}
+            <div className="rounded-[1.5rem] border border-[#1a2235] bg-[#0c1220] overflow-hidden flex-1 flex flex-col">
+              <div className="flex items-center justify-between p-5 border-b border-[#1a2235]">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Live Feed
+                </h3>
+                <Link
+                  href="/jobs"
+                  className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest"
                 >
-                  <div className="flex items-center justify-between gap-3 mb-1">
-                    <span className="truncate text-xs font-bold text-slate-300 group-hover:text-white transition-colors">
-                      {job.url}
-                    </span>
-                    <div
-                      className={cn(
-                        "h-1.5 w-1.5 rounded-full shrink-0",
-                        job.status === "completed"
-                          ? "bg-emerald-500"
-                          : "bg-amber-500",
-                      )}
-                    />
+                  History
+                </Link>
+              </div>
+              <div className="divide-y divide-[#1a2235] overflow-y-auto">
+                {recentActivity.map((job) => (
+                  <div
+                    key={job.jobId}
+                    className="group cursor-pointer p-4 transition-colors hover:bg-[#131b2c]"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <span className="truncate text-xs font-bold text-slate-300 group-hover:text-white transition-colors">
+                        {job.url}
+                      </span>
+                      <div
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full shrink-0",
+                          job.status === "completed"
+                            ? "bg-emerald-500"
+                            : "bg-amber-500",
+                        )}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                      <span>{job.jobId.slice(0, 8)}</span>
+                      <span className="capitalize">{job.status}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                    <span>{job.jobId.slice(0, 8)}</span>
-                    <span className="capitalize">{job.status}</span>
+                ))}
+                {recentActivity.length === 0 && (
+                  <div className="p-10 text-center text-slate-500 text-xs">
+                    Waiting for stream...
                   </div>
-                </div>
-              ))}
-              {recentActivity.length === 0 && (
-                <div className="p-10 text-center text-slate-500 text-xs">
-                  Waiting for stream...
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
