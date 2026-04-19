@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import {
   AreaChart,
@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useDashboardSession } from "@/components/page/dashboard/session-provider";
+import type { JobsOverviewTimeSeriesBucket } from "@repo/queue-contracts";
 import {
   Select,
   SelectContent,
@@ -89,9 +90,15 @@ const QUEUE_CHART_TIMEFRAMES: Array<{
 ];
 
 export function OverviewPage() {
-  const { overview, refreshing, handleRefresh } = useDashboardSession();
-  const [queueChartTimeframe, setQueueChartTimeframe] =
-    useState<QueueChartTimeframe>("day");
+  const {
+    overview,
+    refreshing,
+    handleRefresh,
+    overviewTimeSeries,
+    queueChartTimeframe,
+    setQueueChartTimeframe,
+    loadOverviewTimeSeries,
+  } = useDashboardSession();
 
   const totalJobs = overview?.total ?? 0;
   const completed = overview?.statusCounts?.completed ?? 0;
@@ -102,56 +109,65 @@ export function OverviewPage() {
     (w) => w.status === "processing",
   ).length;
   const totalWorkers = overview?.workers?.length ?? 0;
-  const recentJobs = useMemo(
-    () => overview?.recentJobs ?? [],
-    [overview?.recentJobs],
-  );
 
-  const queueChartSettings = useMemo(() => {
-    switch (queueChartTimeframe) {
-      case "hour":
-        return {
-          bucketMs: 3_600_000,
-          lookbackMs: 24 * 3_600_000,
-          axisFormat: { hour: "numeric" as const, minute: "2-digit" as const },
-          fullFormat: {
-            weekday: "short" as const,
-            month: "short" as const,
-            day: "numeric" as const,
-            year: "numeric" as const,
-            hour: "numeric" as const,
-            minute: "2-digit" as const,
-          },
-        };
-      case "12h":
-        return {
-          bucketMs: 12 * 3_600_000,
-          lookbackMs: 7 * 86_400_000,
-          axisFormat: { hour: "numeric" as const },
-          fullFormat: {
-            weekday: "short" as const,
-            month: "short" as const,
-            day: "numeric" as const,
-            year: "numeric" as const,
-            hour: "numeric" as const,
-            minute: "2-digit" as const,
-          },
-        };
-      case "day":
-      default:
-        return {
-          bucketMs: 86_400_000,
-          lookbackMs: 30 * 86_400_000,
-          axisFormat: { month: "short" as const, day: "numeric" as const },
-          fullFormat: {
-            weekday: "short" as const,
-            month: "short" as const,
-            day: "numeric" as const,
-            year: "numeric" as const,
-          },
-        };
+  const chartData = useMemo(() => {
+    if (!overviewTimeSeries) {
+      return [];
     }
-  }, [queueChartTimeframe]);
+
+    const formatAxisLabel = (date: Date, timeframe: QueueChartTimeframe) => {
+      const axisFormat =
+        timeframe === "hour"
+          ? { hour: "numeric" as const, minute: "2-digit" as const }
+          : timeframe === "12h"
+            ? { hour: "numeric" as const }
+            : { month: "short" as const, day: "numeric" as const };
+      return date.toLocaleString("en-US", axisFormat);
+    };
+
+    const formatTooltipLabel = (date: Date, timeframe: QueueChartTimeframe) => {
+      const fullFormat =
+        timeframe === "hour"
+          ? {
+              weekday: "short" as const,
+              month: "short" as const,
+              day: "numeric" as const,
+              year: "numeric" as const,
+              hour: "numeric" as const,
+              minute: "2-digit" as const,
+            }
+          : timeframe === "12h"
+            ? {
+                weekday: "short" as const,
+                month: "short" as const,
+                day: "numeric" as const,
+                year: "numeric" as const,
+                hour: "numeric" as const,
+                minute: "2-digit" as const,
+              }
+            : {
+                weekday: "short" as const,
+                month: "short" as const,
+                day: "numeric" as const,
+                year: "numeric" as const,
+              };
+      return date.toLocaleString("en-US", fullFormat);
+    };
+
+    return overviewTimeSeries.buckets.map(
+      (bucket: JobsOverviewTimeSeriesBucket) => {
+        const bucketDate = new Date(bucket.bucketStart);
+        return {
+          timeKey: bucket.timeKey,
+          name: formatAxisLabel(bucketDate, queueChartTimeframe),
+          fullDate: formatTooltipLabel(bucketDate, queueChartTimeframe),
+          dispatched: bucket.dispatched,
+          completed: bucket.completed,
+          failed: bucket.failed,
+        };
+      },
+    );
+  }, [overviewTimeSeries, queueChartTimeframe]);
 
   const systemLoad = useMemo(() => {
     if (!overview) return "—";
@@ -165,83 +181,14 @@ export function OverviewPage() {
     return "High";
   }, [overview, queueDepth, totalWorkers]);
 
-  const chartData = useMemo(() => {
-    const { bucketMs, lookbackMs, axisFormat, fullFormat } = queueChartSettings;
-    const formatBucketKey = (date: Date) => `${date.getTime()}`;
-    const getBucketStart = (date: Date) => {
-      const bucket = new Date(date);
-      if (queueChartTimeframe === "hour") {
-        bucket.setMinutes(0, 0, 0);
-      } else if (queueChartTimeframe === "12h") {
-        bucket.setMinutes(0, 0, 0);
-        bucket.setHours(bucket.getHours() < 12 ? 0 : 12);
-      } else {
-        bucket.setHours(0, 0, 0, 0);
-      }
-      return bucket;
-    };
-    const formatAxisLabel = (date: Date) =>
-      date.toLocaleString("en-US", axisFormat);
-    const formatTooltipLabel = (date: Date) =>
-      date.toLocaleString("en-US", fullFormat);
-
-    const endPoint = new Date();
-    const startPoint = new Date(endPoint.getTime() - lookbackMs);
-    const startBucket = getBucketStart(startPoint);
-    const endBucket = getBucketStart(endPoint);
-
-    const grouped = new Map<
-      string,
-      {
-        timeKey: string;
-        name: string;
-        fullDate: string;
-        dispatched: number;
-        completed: number;
-        failed: number;
-      }
-    >();
-
-    for (
-      let cursor = new Date(startBucket);
-      cursor <= endBucket;
-      cursor = new Date(cursor.getTime() + bucketMs)
-    ) {
-      const dateKey = formatBucketKey(cursor);
-      grouped.set(dateKey, {
-        timeKey: dateKey,
-        name: formatAxisLabel(cursor),
-        fullDate: formatTooltipLabel(cursor),
-        dispatched: 0,
-        completed: 0,
-        failed: 0,
-      });
-    }
-
-    recentJobs.forEach((job) => {
-      const date = new Date(job.updatedAt || job.requestedAt);
-      if (Number.isNaN(date.getTime())) return;
-
-      const key = formatBucketKey(getBucketStart(date));
-      const entry = grouped.get(key);
-      if (entry) {
-        entry.dispatched += 1;
-        if (job.status === "completed") entry.completed += 1;
-        if (job.status === "failed") entry.failed += 1;
-      }
-    });
-
-    return Array.from(grouped.values());
-  }, [queueChartSettings, queueChartTimeframe, recentJobs]);
-
   const recentActivity = overview?.recentJobs?.slice(0, 5) ?? [];
 
   return (
     <div className="relative w-full min-w-0 space-y-8 pb-10 z-0">
       {/* Decorative Top-Right Grid Background */}
-      <div className="fixed right-0 top-0 h-screen w-screen pointer-events-none -z-50 overflow-hidden">
-        <div className="absolute right-0 top-0 h-full w-[80%] bg-[linear-gradient(to_right,rgba(99,102,241,0.15)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.15)_1px,transparent_1px)] bg-size-[50px_50px] mask-[radial-gradient(ellipse_80%_60%_at_100%_0%,#000_70%,transparent_100%)]" />
-        <div className="absolute right-0 top-0 -translate-y-1/3 translate-x-1/3 h-150 w-150 rounded-full bg-indigo-600/20 blur-[120px]" />
+      <div className="fixed inset-0 pointer-events-none -z-50 overflow-hidden">
+        <div className="absolute inset-y-0 right-0 left-[20%] bg-[linear-gradient(to_right,rgba(99,102,241,0.15)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.15)_1px,transparent_1px)] bg-size-[50px_50px] mask-[radial-gradient(ellipse_80%_60%_at_100%_0%,#000_70%,transparent_100%)]" />
+        <div className="absolute right-0 top-0 h-150 w-150 -translate-y-1/3 translate-x-1/3 rounded-full bg-indigo-600/20 blur-[120px]" />
       </div>
 
       {/* Top Welcome Title */}
@@ -499,9 +446,11 @@ export function OverviewPage() {
                   </div>
                   <Select
                     value={queueChartTimeframe}
-                    onValueChange={(value) =>
-                      setQueueChartTimeframe(value as QueueChartTimeframe)
-                    }
+                    onValueChange={(value) => {
+                      const newTimeframe = value as QueueChartTimeframe;
+                      setQueueChartTimeframe(newTimeframe);
+                      void loadOverviewTimeSeries(newTimeframe);
+                    }}
                   >
                     <SelectTrigger className="h-9 rounded-xl border-[#1a2235] bg-[#121828] text-slate-200 sm:w-44">
                       <SelectValue />
@@ -570,8 +519,9 @@ export function OverviewPage() {
                       axisLine={false}
                       dy={10}
                       tickFormatter={(value) => {
+                        type ChartItem = (typeof chartData)[0];
                         const entry = chartData.find(
-                          (item) => item.timeKey === value,
+                          (item: ChartItem) => item.timeKey === value,
                         );
                         return entry?.name ?? "";
                       }}

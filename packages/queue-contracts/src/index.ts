@@ -176,6 +176,27 @@ export interface JobsOverviewSnapshot {
   recentJobs: ScrapeJobRecord[];
 }
 
+export type JobsOverviewTimeSeriesTimeframe = "hour" | "12h" | "day";
+
+export interface JobsOverviewTimeSeriesBucket {
+  timeKey: string;
+  bucketStart: string;
+  dispatched: number;
+  completed: number;
+  failed: number;
+}
+
+export interface JobsOverviewTimeSeriesSnapshot {
+  queueName: string;
+  timeframe: JobsOverviewTimeSeriesTimeframe;
+  bucketMs: number;
+  lookbackMs: number;
+  lookbackBuckets: number;
+  generatedAt: string;
+  totalJobsConsidered: number;
+  buckets: JobsOverviewTimeSeriesBucket[];
+}
+
 export type WebhookEventName =
   | "job.completed"
   | "job.failed"

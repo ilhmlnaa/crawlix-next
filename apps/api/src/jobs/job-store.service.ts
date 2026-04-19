@@ -201,7 +201,7 @@ export class JobStoreService {
     return client.llen(this.indexKey);
   }
 
-  async getOverviewData(recentLimit = 50): Promise<{
+  async getOverviewData(recentLimit?: number): Promise<{
     recentJobs: ScrapeJobRecord[];
     total: number;
     statusCounts: JobStatusCounts;
@@ -209,7 +209,10 @@ export class JobStoreService {
     const client = this.redisService.getClient();
     await client.connect().catch(() => undefined);
 
-    const safeRecentLimit = Math.max(1, Math.floor(recentLimit));
+    const safeRecentLimit =
+      typeof recentLimit === 'number' && Number.isFinite(recentLimit)
+        ? Math.max(1, Math.floor(recentLimit))
+        : Number.POSITIVE_INFINITY;
     const jobIds = await client.lrange(this.indexKey, 0, -1);
     const total = jobIds.length;
 

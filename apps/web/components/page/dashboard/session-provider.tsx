@@ -5,6 +5,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
   startTransition,
 } from "react";
@@ -14,6 +15,8 @@ import type {
   CreateApiKeyResponse,
   EnqueueJobResponse,
   JobsOverviewSnapshot,
+  JobsOverviewTimeSeriesSnapshot,
+  JobsOverviewTimeSeriesTimeframe,
   ScrapeJobOptions,
   ScrapeJobRecord,
 } from "@repo/queue-contracts";
@@ -63,6 +66,13 @@ export interface DashboardSessionValue {
   setPassword: (v: string) => void;
   loginError: string | null;
   loggingIn: boolean;
+  overviewTimeSeries: JobsOverviewTimeSeriesSnapshot | null;
+  loadingOverviewTimeSeries: boolean;
+  queueChartTimeframe: JobsOverviewTimeSeriesTimeframe;
+  setQueueChartTimeframe: (timeframe: JobsOverviewTimeSeriesTimeframe) => void;
+  loadOverviewTimeSeries: (
+    timeframe?: JobsOverviewTimeSeriesTimeframe,
+  ) => Promise<void>;
 
   handleLogin: () => Promise<void>;
   handleLogout: () => Promise<void>;
@@ -120,6 +130,18 @@ export function DashboardSessionProvider({
   const [revealableKeyId, setRevealableKeyId] = useState<string | null>(null);
   const [newApiKeyValue, setNewApiKeyValue] = useState<string | null>(null);
   const [copiedNewApiKey, setCopiedNewApiKey] = useState(false);
+  const [overviewTimeSeries, setOverviewTimeSeries] =
+    useState<JobsOverviewTimeSeriesSnapshot | null>(null);
+  const [loadingOverviewTimeSeries, setLoadingOverviewTimeSeries] =
+    useState(false);
+  const [queueChartTimeframe, setQueueChartTimeframe] =
+    useState<JobsOverviewTimeSeriesTimeframe>("day");
+  const timeframeRef = useRef<JobsOverviewTimeSeriesTimeframe>("day");
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    timeframeRef.current = queueChartTimeframe;
+  }, [queueChartTimeframe]);
 
   const loadOverview = useCallback(async () => {
     const snapshot = await fetchJson<JobsOverviewSnapshot>(
@@ -129,6 +151,20 @@ export function DashboardSessionProvider({
       startTransition(() => setOverview(snapshot));
     }
   }, [apiBaseUrl]);
+
+  const loadOverviewTimeSeries = useCallback(
+    async (timeframe: JobsOverviewTimeSeriesTimeframe = "day") => {
+      setLoadingOverviewTimeSeries(true);
+      const snapshot = await fetchJson<JobsOverviewTimeSeriesSnapshot>(
+        `${apiBaseUrl}/jobs/overview/time-series?timeframe=${timeframe}`,
+      );
+      if (snapshot) {
+        startTransition(() => setOverviewTimeSeries(snapshot));
+      }
+      setLoadingOverviewTimeSeries(false);
+    },
+    [apiBaseUrl],
+  );
 
   const loadApiKeys = useCallback(async () => {
     setLoadingApiKeys(true);
@@ -149,7 +185,11 @@ export function DashboardSessionProvider({
       if (cancelled) return;
       if (me?.admin) {
         setAdmin(me.admin);
-        await Promise.all([loadOverview(), loadApiKeys()]);
+        await Promise.all([
+          loadOverview(),
+          loadApiKeys(),
+          loadOverviewTimeSeries(),
+        ]);
       }
       setAuthLoading(false);
     };
@@ -157,7 +197,7 @@ export function DashboardSessionProvider({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, loadApiKeys, loadOverview]);
+  }, [apiBaseUrl, loadApiKeys, loadOverview, loadOverviewTimeSeries]);
 
   useEffect(() => {
     const stored = window.sessionStorage.getItem(NEW_API_KEY_SESSION_KEY);
@@ -175,10 +215,14 @@ export function DashboardSessionProvider({
     if (!admin) return;
     const interval = setInterval(() => {
       setRefreshing(true);
-      loadOverview().then(() => setRefreshing(false));
+      // Use ref to access latest timeframe without re-triggering effect
+      Promise.all([
+        loadOverview(),
+        loadOverviewTimeSeries(timeframeRef.current),
+      ]).then(() => setRefreshing(false));
     }, 10_000);
     return () => clearInterval(interval);
-  }, [admin, loadOverview]);
+  }, [admin, loadOverview, loadOverviewTimeSeries]);
 
   const handleLogin = async () => {
     setLoggingIn(true);
@@ -217,8 +261,11 @@ export function DashboardSessionProvider({
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([loadOverview(), loadApiKeys()]);
-    setRefreshing(false);
+    await Promise.all([
+      loadOverview(),
+      loadApiKeys(),
+      loadOverviewTimeSeries(queueChartTimeframe),
+    ]).then(() => setRefreshing(false));
   };
 
   const handleRetry = async (jobId: string) => {
@@ -365,6 +412,11 @@ export function DashboardSessionProvider({
         setPassword,
         loginError,
         loggingIn,
+        overviewTimeSeries,
+        loadingOverviewTimeSeries,
+        queueChartTimeframe,
+        setQueueChartTimeframe,
+        loadOverviewTimeSeries,
         handleLogin,
         handleLogout,
         handleRefresh,

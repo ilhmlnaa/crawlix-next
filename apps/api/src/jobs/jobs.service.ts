@@ -7,6 +7,8 @@ import {
   type JobsDashboardSnapshot,
   type JobsPageSnapshot,
   type JobsOverviewSnapshot,
+  type JobsOverviewTimeSeriesSnapshot,
+  type JobsOverviewTimeSeriesTimeframe,
   type ScrapeJobMessage,
   type ScrapeJobRecord,
   type WorkerHeartbeat,
@@ -19,15 +21,104 @@ import { WebhookEventService } from './webhook-event.service';
 
 const MAX_PAGE_SIZE = 50;
 const DEFAULT_PAGE_SIZE = 25;
+const OVERVIEW_CACHE_TTL_MS = 5_000;
+const DEFAULT_TIME_SERIES_LOOKBACK_BUCKETS = 30;
+const MAX_TIME_SERIES_LOOKBACK_BUCKETS = 120;
+
+type TimeSeriesSettings = {
+  bucketMs: number;
+  defaultLookbackBuckets: number;
+};
+
+type CachedValue<T> = {
+  value: T;
+  expiresAt: number;
+};
 
 @Injectable()
 export class JobsService {
+  private readonly overviewCache = new Map<string, CachedValue<unknown>>();
+
   constructor(
     private readonly jobStore: JobStoreService,
     private readonly publisher: QueuePublisherService,
     private readonly workerRegistry: WorkerRegistryService,
     private readonly webhookEvents: WebhookEventService,
   ) {}
+
+  private invalidateOverviewCache() {
+    this.overviewCache.clear();
+  }
+
+  private pruneOverviewCache() {
+    const now = Date.now();
+    this.overviewCache.forEach((entry, key) => {
+      if (entry.expiresAt <= now) {
+        this.overviewCache.delete(key);
+      }
+    });
+  }
+
+  private async getOrSetOverviewCache<T>(
+    key: string,
+    compute: () => Promise<T>,
+  ): Promise<T> {
+    this.pruneOverviewCache();
+    const cached = this.overviewCache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value as T;
+    }
+
+    const value = await compute();
+    this.overviewCache.set(key, {
+      value,
+      expiresAt: Date.now() + OVERVIEW_CACHE_TTL_MS,
+    });
+    return value;
+  }
+
+  private getTimeSeriesSettings(
+    timeframe: JobsOverviewTimeSeriesTimeframe,
+  ): TimeSeriesSettings {
+    if (timeframe === 'hour') {
+      return {
+        bucketMs: 3_600_000,
+        defaultLookbackBuckets: 24,
+      };
+    }
+
+    if (timeframe === '12h') {
+      return {
+        bucketMs: 12 * 3_600_000,
+        defaultLookbackBuckets: 14,
+      };
+    }
+
+    return {
+      bucketMs: 86_400_000,
+      defaultLookbackBuckets: DEFAULT_TIME_SERIES_LOOKBACK_BUCKETS,
+    };
+  }
+
+  private getBucketStart(
+    date: Date,
+    timeframe: JobsOverviewTimeSeriesTimeframe,
+  ): Date {
+    const bucket = new Date(date);
+    if (timeframe === 'hour') {
+      bucket.setMinutes(0, 0, 0);
+      return bucket;
+    }
+
+    if (timeframe === '12h') {
+      bucket.setMinutes(0, 0, 0);
+      bucket.setHours(bucket.getHours() < 12 ? 0 : 12);
+      return bucket;
+    }
+
+    bucket.setHours(0, 0, 0, 0);
+    return bucket;
+  }
 
   async enqueue(input: CreateScrapeJobInput): Promise<EnqueueJobResponse> {
     return this.enqueueFromInput(input);
@@ -119,6 +210,7 @@ export class JobsService {
       await this.jobStore.saveIdempotentJob(idempotencyKey, jobId);
     }
     await this.publisher.publish(message);
+    this.invalidateOverviewCache();
 
     return {
       jobId,
@@ -203,6 +295,7 @@ export class JobsService {
         existing.webhookSecret,
       );
     }
+    this.invalidateOverviewCache();
     return this.jobStore.getRecord(jobId);
   }
 
@@ -257,36 +350,124 @@ export class JobsService {
     };
   }
 
-  async getOverviewSnapshot(): Promise<JobsOverviewSnapshot> {
-    const config = getApiRuntimeConfig();
-    const [{ recentJobs, total, statusCounts }, workers] = await Promise.all([
-      this.jobStore.getOverviewData(config.redis.jobIndexMaxRecords),
-      this.workerRegistry.listWorkers(),
-    ]);
-    const queueStats = await this.publisher.getQueueStats().catch(() => ({
-      messageCount: 0,
-      consumerCount: 0,
-      retryMessageCount: 0,
-      deadLetterMessageCount: 0,
-      webhookMessageCount: 0,
-      webhookRetryMessageCount: 0,
-      webhookDeadLetterMessageCount: 0,
-    }));
+  async getOverviewSnapshot(
+    recentLimit?: number,
+  ): Promise<JobsOverviewSnapshot> {
+    const cacheKey = `overview:${recentLimit ?? 'all'}`;
+    return this.getOrSetOverviewCache(cacheKey, async () => {
+      const config = getApiRuntimeConfig();
+      const [{ recentJobs, total, statusCounts }, workers] = await Promise.all([
+        this.jobStore.getOverviewData(recentLimit),
+        this.workerRegistry.listWorkers(),
+      ]);
+      const queueStats = await this.publisher.getQueueStats().catch(() => ({
+        messageCount: 0,
+        consumerCount: 0,
+        retryMessageCount: 0,
+        deadLetterMessageCount: 0,
+        webhookMessageCount: 0,
+        webhookRetryMessageCount: 0,
+        webhookDeadLetterMessageCount: 0,
+      }));
 
-    return {
-      queueName: config.queue.queueName,
-      total,
-      statusCounts,
-      queueDepth: queueStats.messageCount,
-      consumerCount: queueStats.consumerCount,
-      retryQueueDepth: queueStats.retryMessageCount,
-      deadLetterQueueDepth: queueStats.deadLetterMessageCount,
-      webhookQueueDepth: queueStats.webhookMessageCount,
-      webhookRetryQueueDepth: queueStats.webhookRetryMessageCount,
-      webhookDeadLetterQueueDepth: queueStats.webhookDeadLetterMessageCount,
-      workers,
-      recentJobs,
-    };
+      return {
+        queueName: config.queue.queueName,
+        total,
+        statusCounts,
+        queueDepth: queueStats.messageCount,
+        consumerCount: queueStats.consumerCount,
+        retryQueueDepth: queueStats.retryMessageCount,
+        deadLetterQueueDepth: queueStats.deadLetterMessageCount,
+        webhookQueueDepth: queueStats.webhookMessageCount,
+        webhookRetryQueueDepth: queueStats.webhookRetryMessageCount,
+        webhookDeadLetterQueueDepth: queueStats.webhookDeadLetterMessageCount,
+        workers,
+        recentJobs,
+      };
+    });
+  }
+
+  async getOverviewTimeSeries(
+    timeframe: JobsOverviewTimeSeriesTimeframe,
+    lookbackBuckets?: number,
+  ): Promise<JobsOverviewTimeSeriesSnapshot> {
+    const settings = this.getTimeSeriesSettings(timeframe);
+    const safeLookbackBuckets = Number.isFinite(lookbackBuckets)
+      ? Math.min(
+          MAX_TIME_SERIES_LOOKBACK_BUCKETS,
+          Math.max(1, Math.floor(lookbackBuckets as number)),
+        )
+      : settings.defaultLookbackBuckets;
+    const cacheKey = `overview:timeseries:${timeframe}:${safeLookbackBuckets}`;
+
+    return this.getOrSetOverviewCache(cacheKey, async () => {
+      const config = getApiRuntimeConfig();
+      const { recentJobs } = await this.jobStore.getOverviewData();
+      const endBucket = this.getBucketStart(new Date(), timeframe);
+      const startBucket = new Date(
+        endBucket.getTime() - (safeLookbackBuckets - 1) * settings.bucketMs,
+      );
+
+      const grouped = new Map<
+        string,
+        {
+          timeKey: string;
+          bucketStart: string;
+          dispatched: number;
+          completed: number;
+          failed: number;
+        }
+      >();
+
+      for (
+        let cursor = new Date(startBucket);
+        cursor <= endBucket;
+        cursor = new Date(cursor.getTime() + settings.bucketMs)
+      ) {
+        const bucketStartIso = cursor.toISOString();
+        const timeKey = `${cursor.getTime()}`;
+        grouped.set(timeKey, {
+          timeKey,
+          bucketStart: bucketStartIso,
+          dispatched: 0,
+          completed: 0,
+          failed: 0,
+        });
+      }
+
+      recentJobs.forEach((job) => {
+        const date = new Date(job.updatedAt || job.requestedAt);
+        if (Number.isNaN(date.getTime())) {
+          return;
+        }
+
+        const bucketStart = this.getBucketStart(date, timeframe);
+        const timeKey = `${bucketStart.getTime()}`;
+        const entry = grouped.get(timeKey);
+        if (!entry) {
+          return;
+        }
+
+        entry.dispatched += 1;
+        if (job.status === 'completed') {
+          entry.completed += 1;
+        }
+        if (job.status === 'failed') {
+          entry.failed += 1;
+        }
+      });
+
+      return {
+        queueName: config.queue.queueName,
+        timeframe,
+        bucketMs: settings.bucketMs,
+        lookbackMs: safeLookbackBuckets * settings.bucketMs,
+        lookbackBuckets: safeLookbackBuckets,
+        generatedAt: nowIso(),
+        totalJobsConsidered: recentJobs.length,
+        buckets: Array.from(grouped.values()),
+      };
+    });
   }
 
   async listWorkers(): Promise<WorkerHeartbeat[]> {
