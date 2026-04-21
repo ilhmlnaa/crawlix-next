@@ -61,6 +61,7 @@ export interface ScrapeJobMessage {
   requestedAt: string;
   fingerprint: string;
   targetWorkerId?: string;
+  targetWorkerHostname?: string;
   retriedFromJobId?: string;
   deliveryAttempt?: number;
   webhookUrl?: string;
