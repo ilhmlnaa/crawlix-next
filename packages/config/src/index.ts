@@ -1,3 +1,5 @@
+import os from "node:os";
+
 export interface QueueConfig {
   url: string;
   queueName: string;
@@ -33,6 +35,7 @@ export interface ApiRuntimeConfig {
 
 export interface WorkerRuntimeConfig {
   serviceName: string;
+  workerHostname: string;
   port: number;
   processingWatchdogTimeoutMs: number;
   workerConcurrency: number;
@@ -303,6 +306,7 @@ export function validateWorkerRuntimeConfig(
   return {
     ...config,
     serviceName: assertNonEmpty(config.serviceName, "WORKER_SERVICE_NAME"),
+    workerHostname: assertNonEmpty(config.workerHostname, "WORKER_HOSTNAME"),
     port: assertPositiveInteger(config.port, "WORKER_PORT"),
     processingWatchdogTimeoutMs: assertPositiveInteger(
       config.processingWatchdogTimeoutMs,
@@ -412,6 +416,7 @@ export function getWorkerRuntimeConfig(
 ): WorkerRuntimeConfig {
   return {
     serviceName: env.WORKER_SERVICE_NAME ?? "crawlix-worker",
+    workerHostname: env.WORKER_HOSTNAME ?? os.hostname(),
     port: Number(env.PORT ?? readPort(env, "WORKER_PORT", 3002)),
     processingWatchdogTimeoutMs: readNumber(
       env.WORKER_PROCESSING_WATCHDOG_TIMEOUT_MS,

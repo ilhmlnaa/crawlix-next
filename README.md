@@ -264,6 +264,7 @@ For standard local development, use the root `.env` file. The repository already
 | ----------------------------------- | -------------------------------------------------- |
 | `API_PORT`                          | Dedicated port for the NestJS API                  |
 | `WORKER_PORT`                       | Dedicated port for the NestJS worker               |
+| `WORKER_HOSTNAME`                   | Logical hostname label used for worker targeting   |
 | `DASHBOARD_PORT`                    | Dedicated port for the Next.js dashboard runtime   |
 | `RABBITMQ_URL`                      | RabbitMQ connection string                         |
 | `REDIS_URL`                         | Redis connection string                            |
@@ -316,6 +317,10 @@ For backward compatibility, `PORT` is still accepted as a fallback. The lookup p
 - API: `API_PORT` -> `PORT` -> `3001`
 - Worker: `WORKER_PORT` -> `PORT` -> `3002`
 - Dashboard: `DASHBOARD_PORT` -> `PORT` -> `3000`
+
+For hostname-targeted jobs, set `WORKER_HOSTNAME` to a stable logical name. If multiple workers share the same hostname, the API resolves the hostname to one active worker in round-robin order before publishing the job.
+
+Hostname groups are not a separate concept yet. If you later want strict group-based routing instead of hostname-based balancing, that can be added as a distinct field without changing the current worker targeting flow.
 
 This matters especially for Docker deployment:
 

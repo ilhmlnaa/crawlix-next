@@ -3,6 +3,7 @@ import { getApiRuntimeConfig } from '@repo/config';
 import type { WorkerHeartbeat } from '@repo/queue-contracts';
 import {
   createWorkerHeartbeatKey,
+  createWorkerHostnameRoundRobinKey,
   createWorkersIndexKey,
 } from '@repo/shared';
 import { RedisService } from '../infrastructure/redis.service';
@@ -49,5 +50,47 @@ export class WorkerRegistryService {
     );
 
     return raw ? (JSON.parse(raw) as WorkerHeartbeat) : null;
+  }
+
+  async getWorkersByHostname(hostname: string): Promise<WorkerHeartbeat[]> {
+    const trimmedHostname = hostname.trim();
+    if (!trimmedHostname) {
+      return [];
+    }
+
+    const workers = await this.listWorkers();
+    return workers.filter((worker) => worker.hostname === trimmedHostname);
+  }
+
+  async resolveWorkerByHostname(
+    hostname: string,
+  ): Promise<WorkerHeartbeat | null> {
+    const trimmedHostname = hostname.trim();
+    if (!trimmedHostname) {
+      return null;
+    }
+
+    const workers = (await this.getWorkersByHostname(trimmedHostname)).sort(
+      (left, right) => left.workerId.localeCompare(right.workerId),
+    );
+
+    if (workers.length === 0) {
+      return null;
+    }
+
+    if (workers.length === 1) {
+      return workers[0];
+    }
+
+    const client = this.redisService.getClient();
+    await client.connect().catch(() => undefined);
+    const rotationKey = createWorkerHostnameRoundRobinKey(
+      this.config.redis.jobPrefix,
+      trimmedHostname,
+    );
+    const nextRotation = await client.incr(rotationKey);
+    const index = (nextRotation - 1) % workers.length;
+
+    return workers[index] ?? workers[0] ?? null;
   }
 }

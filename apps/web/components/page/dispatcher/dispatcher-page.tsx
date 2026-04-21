@@ -37,6 +37,7 @@ export function DispatcherPage() {
   const [url, setUrl] = useState("");
   const [strategy, setStrategy] = useState<ScrapeStrategy>("auto");
   const [workerId, setWorkerId] = useState("");
+  const [workerHostname, setWorkerHostname] = useState("");
   const [timeoutMs, setTimeoutMs] = useState("30000");
   const [maxRetries, setMaxRetries] = useState("2");
   const [retryDelayMs, setRetryDelayMs] = useState("1000");
@@ -104,12 +105,13 @@ export function DispatcherPage() {
     url,
     strategy,
     targetWorkerId: workerId || undefined,
+    targetWorkerHostname: workerHostname.trim() || undefined,
     options: buildOptions(),
   });
 
   const applyPayloadFromJson = (payload: unknown): string | undefined => {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      return "Payload harus object JSON dengan format { url, strategy, targetWorkerId, options }";
+      return "Payload harus object JSON dengan format { url, strategy, targetWorkerId, targetWorkerHostname, options }";
     }
 
     const root = payload as Record<string, unknown>;
@@ -132,6 +134,13 @@ export function DispatcherPage() {
       typeof root.targetWorkerId !== "string"
     ) {
       return "Field `targetWorkerId` harus berupa string";
+    }
+
+    if (
+      root.targetWorkerHostname !== undefined &&
+      typeof root.targetWorkerHostname !== "string"
+    ) {
+      return "Field `targetWorkerHostname` harus berupa string";
     }
 
     const nextOptionsRaw = root.options;
@@ -217,6 +226,11 @@ export function DispatcherPage() {
     setWorkerId(
       typeof root.targetWorkerId === "string" ? root.targetWorkerId : "",
     );
+    setWorkerHostname(
+      typeof root.targetWorkerHostname === "string"
+        ? root.targetWorkerHostname
+        : "",
+    );
 
     const nextTimeout = toStringNumber(nextOptions.timeoutMs);
     const nextMaxRetries = toStringNumber(nextOptions.maxRetries);
@@ -271,6 +285,7 @@ export function DispatcherPage() {
         url,
         strategy,
         workerId || undefined,
+        workerHostname.trim() || undefined,
         buildOptions(),
       );
       if (result?.jobId) {
@@ -280,6 +295,7 @@ export function DispatcherPage() {
           url,
           strategy,
           targetWorkerId: workerId || undefined,
+          targetWorkerHostname: workerHostname.trim() || undefined,
           status: "queued",
           requestedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -437,6 +453,22 @@ export function DispatcherPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Target Worker Hostname
+                </label>
+                <Input
+                  placeholder="crawlix-worker-east-1"
+                  value={workerHostname}
+                  onChange={(e) => setWorkerHostname(e.target.value)}
+                  className="bg-[#121828] border-[#1a2235] text-slate-200 h-12 rounded-xl focus-visible:ring-indigo-500"
+                />
+                <p className="text-[11px] text-slate-600">
+                  Optional. If set together with worker ID, worker ID tetap
+                  diprioritaskan.
+                </p>
               </div>
 
               {/* Headers Editor */}

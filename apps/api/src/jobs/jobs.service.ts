@@ -141,7 +141,9 @@ export class JobsService {
     };
     const jobId = createJobId();
     const fingerprint = createQueueFingerprint(input.url, strategy, options);
-    const targetWorkerId = input.targetWorkerId?.trim() || undefined;
+    let targetWorkerId = input.targetWorkerId?.trim() || undefined;
+    const targetWorkerHostname =
+      input.targetWorkerHostname?.trim() || undefined;
     const webhookUrl = input.webhookUrl?.trim() || undefined;
     const webhookSecret = input.webhookSecret?.trim() || undefined;
     const idempotencyKey = input.idempotencyKey?.trim() || undefined;
@@ -157,6 +159,7 @@ export class JobsService {
           queuedAt: existing.requestedAt,
           resultTtlSeconds: config.redis.resultTtlSeconds,
           targetWorkerId: existing.targetWorkerId,
+          targetWorkerHostname: existing.targetWorkerHostname,
           retriedFromJobId: existing.retriedFromJobId,
           webhookUrl: existing.webhookUrl,
           idempotencyKey: existing.idempotencyKey,
@@ -171,6 +174,17 @@ export class JobsService {
           `Target worker "${targetWorkerId}" is not active`,
         );
       }
+    } else if (targetWorkerHostname) {
+      const worker =
+        await this.workerRegistry.resolveWorkerByHostname(targetWorkerHostname);
+
+      if (!worker) {
+        throw new NotFoundException(
+          `No active workers found for hostname "${targetWorkerHostname}"`,
+        );
+      }
+
+      targetWorkerId = worker.workerId;
     }
 
     const record: ScrapeJobRecord = {
@@ -185,6 +199,7 @@ export class JobsService {
       updatedAt: requestedAt,
       fingerprint,
       targetWorkerId,
+      targetWorkerHostname,
       retriedFromJobId,
       webhookUrl,
       webhookSecret,
@@ -199,6 +214,7 @@ export class JobsService {
       requestedAt,
       fingerprint,
       targetWorkerId,
+      targetWorkerHostname,
       retriedFromJobId,
       webhookUrl,
       webhookSecret,
@@ -220,6 +236,7 @@ export class JobsService {
       queuedAt: requestedAt,
       resultTtlSeconds: config.redis.resultTtlSeconds,
       targetWorkerId,
+      targetWorkerHostname,
       retriedFromJobId,
       webhookUrl,
       idempotencyKey,
@@ -239,6 +256,7 @@ export class JobsService {
         strategy: existing.strategy,
         options: existing.options,
         targetWorkerId: existing.targetWorkerId,
+        targetWorkerHostname: existing.targetWorkerHostname,
         webhookUrl: existing.webhookUrl,
         webhookSecret: existing.webhookSecret,
       },
@@ -270,6 +288,7 @@ export class JobsService {
       requestedAt: existing.requestedAt,
       completedAt,
       targetWorkerId: existing.targetWorkerId,
+      targetWorkerHostname: existing.targetWorkerHostname,
       retriedFromJobId: existing.retriedFromJobId,
       webhookUrl: existing.webhookUrl,
       idempotencyKey: existing.idempotencyKey,
@@ -287,6 +306,7 @@ export class JobsService {
           requestedAt: existing.requestedAt,
           completedAt,
           targetWorkerId: existing.targetWorkerId,
+          targetWorkerHostname: existing.targetWorkerHostname,
           retriedFromJobId: existing.retriedFromJobId,
           webhookUrl: existing.webhookUrl,
           idempotencyKey: existing.idempotencyKey,

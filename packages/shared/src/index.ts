@@ -1,4 +1,4 @@
-import crypto from 'node:crypto';
+import crypto from "node:crypto";
 
 export interface ServiceMetadata {
   name: string;
@@ -16,22 +16,21 @@ export interface IdempotencyKeys {
 
 function stableStringifyValue(value: unknown): string {
   if (value === null || value === undefined) {
-    return 'null';
+    return "null";
   }
 
   if (Array.isArray(value)) {
-    return `[${value.map((item) => stableStringifyValue(item)).join(',')}]`;
+    return `[${value.map((item) => stableStringifyValue(item)).join(",")}]`;
   }
 
-  if (typeof value === 'object') {
+  if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(
-        ([key, nestedValue]) =>
-          `"${key}":${stableStringifyValue(nestedValue)}`,
+        ([key, nestedValue]) => `"${key}":${stableStringifyValue(nestedValue)}`,
       );
 
-    return `{${entries.join(',')}}`;
+    return `{${entries.join(",")}}`;
   }
 
   return JSON.stringify(value);
@@ -96,12 +95,19 @@ export function createWorkersIndexKey(prefix: string): string {
   return `${prefix}:workers`;
 }
 
-export function createWorkerHeartbeatKey(prefix: string, workerId: string): string {
+export function createWorkerHeartbeatKey(
+  prefix: string,
+  workerId: string,
+): string {
   return `${prefix}:worker:${workerId}`;
 }
 
 function sanitizeQueueSegment(value: string): string {
-  return value.replace(/[^a-zA-Z0-9._-]/g, '-');
+  return value.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+function sanitizeRedisSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "-");
 }
 
 export function createTargetedQueueName(
@@ -125,19 +131,29 @@ export function createTargetedDeadLetterQueueName(
   return `${createTargetedQueueName(queueName, workerId)}.dlq`;
 }
 
+export function createWorkerHostnameRoundRobinKey(
+  prefix: string,
+  hostname: string,
+): string {
+  return `${prefix}:worker-hostname:${sanitizeRedisSegment(hostname)}:rr`;
+}
+
 export function createQueueFingerprint(
   url: string,
   strategy: string,
   options?: unknown,
 ): string {
   return crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(`${url}:${strategy}:${stableStringifyValue(options)}`)
-    .digest('hex')
+    .digest("hex")
     .slice(0, 16);
 }
 
-export function createScrapeCacheKey(prefix: string, fingerprint: string): string {
+export function createScrapeCacheKey(
+  prefix: string,
+  fingerprint: string,
+): string {
   return `${prefix}:cache:${fingerprint}`;
 }
 

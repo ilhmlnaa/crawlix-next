@@ -45,6 +45,7 @@ export interface CreateJobInput {
   strategy?: ScrapeStrategy;
   options?: JobOptions;
   targetWorkerId?: string;
+  targetWorkerHostname?: string;
   webhookUrl?: string;
   webhookSecret?: string;
   idempotencyKey?: string;
@@ -58,6 +59,7 @@ export interface EnqueueJobResponse {
   queuedAt: string;
   resultTtlSeconds: number;
   targetWorkerId?: string;
+  targetWorkerHostname?: string;
   retriedFromJobId?: string;
   webhookUrl?: string;
   idempotencyKey?: string;
@@ -75,6 +77,7 @@ export interface JobRecord {
   fingerprint: string;
   options: JobOptions;
   targetWorkerId?: string;
+  targetWorkerHostname?: string;
   retriedFromJobId?: string;
   webhookUrl?: string;
   idempotencyKey?: string;
@@ -98,6 +101,7 @@ export interface JobResult {
   retries?: number;
   cached?: boolean;
   targetWorkerId?: string;
+  targetWorkerHostname?: string;
   retriedFromJobId?: string;
   webhookUrl?: string;
   idempotencyKey?: string;
@@ -163,6 +167,7 @@ export interface WebhookEventPayload {
     requestedAt: string;
     completedAt?: string;
     targetWorkerId?: string;
+    targetWorkerHostname?: string;
     idempotencyKey?: string;
     error?: string;
   };

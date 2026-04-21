@@ -83,6 +83,7 @@ export interface DashboardSessionValue {
     url: string,
     strategy: string,
     workerId?: string,
+    workerHostname?: string,
     options?: ScrapeJobOptions,
   ) => Promise<EnqueueJobResponse | null>;
   handleCreateApiKey: () => Promise<void>;
@@ -294,12 +295,14 @@ export function DashboardSessionProvider({
     url: string,
     strategy: string,
     workerId?: string,
+    workerHostname?: string,
     options?: ScrapeJobOptions,
   ) => {
     const payload = {
       url: url.trim(),
       strategy,
       ...(workerId ? { targetWorkerId: workerId } : {}),
+      ...(workerHostname ? { targetWorkerHostname: workerHostname } : {}),
       ...(options && Object.keys(options).length > 0 ? { options } : {}),
     };
     const created = await fetchJson<EnqueueJobResponse>(`${apiBaseUrl}/jobs`, {

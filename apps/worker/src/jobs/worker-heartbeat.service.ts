@@ -37,6 +37,10 @@ export class WorkerHeartbeatService
     return getWorkerRuntimeConfig();
   }
 
+  private get workerHostname() {
+    return this.config.workerHostname;
+  }
+
   private get heartbeatKey() {
     return createWorkerHeartbeatKey(this.config.redis.jobPrefix, this.workerId);
   }
@@ -80,7 +84,7 @@ export class WorkerHeartbeatService
       targetedQueueName: targetedQueues.queueName,
       retryQueueName: targetedQueues.retryQueueName,
       deadLetterQueueName: targetedQueues.deadLetterQueueName,
-      hostname: os.hostname(),
+      hostname: this.workerHostname,
       pid: process.pid,
       status: this.status,
       startedAt: this.startedAt,
@@ -109,6 +113,7 @@ export class WorkerHeartbeatService
       JSON.stringify({
         event: 'worker.state.changed',
         workerId: this.workerId,
+        hostname: this.workerHostname,
         status: this.status,
         queueName: this.config.queue.queueName,
         targetedQueueName: this.getTargetedQueues().queueName,
@@ -126,6 +131,7 @@ export class WorkerHeartbeatService
       JSON.stringify({
         event: 'worker.state.changed',
         workerId: this.workerId,
+        hostname: this.workerHostname,
         status: this.status,
         currentJobId: jobId,
       }),
@@ -147,6 +153,7 @@ export class WorkerHeartbeatService
       JSON.stringify({
         event: 'worker.state.changed',
         workerId: this.workerId,
+        hostname: this.workerHostname,
         status: this.status,
         processedCount: this.processedCount,
         failedCount: this.failedCount,
@@ -171,6 +178,7 @@ export class WorkerHeartbeatService
       JSON.stringify({
         event: 'worker.state.changed',
         workerId: this.workerId,
+        hostname: this.workerHostname,
         status: 'stopped',
       }),
     );

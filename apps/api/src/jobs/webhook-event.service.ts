@@ -55,6 +55,7 @@ export class WebhookEventService {
         requestedAt: result.requestedAt,
         completedAt: result.completedAt,
         targetWorkerId: result.targetWorkerId,
+        targetWorkerHostname: result.targetWorkerHostname,
         idempotencyKey: result.idempotencyKey,
         error: result.error,
       },

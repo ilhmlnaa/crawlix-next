@@ -291,6 +291,7 @@ export class QueueConsumerService
         completedAt: new Date().toISOString(),
         retries: currentAttempt - 1,
         targetWorkerId: payload.targetWorkerId,
+        targetWorkerHostname: payload.targetWorkerHostname,
         retriedFromJobId: payload.retriedFromJobId,
         webhookUrl: payload.webhookUrl,
         idempotencyKey: payload.idempotencyKey,
