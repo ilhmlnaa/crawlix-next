@@ -466,8 +466,7 @@ export function DispatcherPage() {
                   className="bg-[#121828] border-[#1a2235] text-slate-200 h-12 rounded-xl focus-visible:ring-indigo-500"
                 />
                 <p className="text-[11px] text-slate-600">
-                  Optional. If set together with worker ID, worker ID tetap
-                  diprioritaskan.
+                  Optional. If set together with worker ID, worker ID will be prioritized.
                 </p>
               </div>
 

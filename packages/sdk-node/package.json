@@ -1,6 +1,6 @@
 {
   "name": "@crawlixnext/sdk-node",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "private": false,
   "description": "Official Node.js SDK for the Crawlix Next public async jobs API.",
   "type": "module",

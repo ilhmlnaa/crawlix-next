@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.5
+
+- Added `targetWorkerHostname` to job creation input and public job/result payload types
+- Included hostname in SDK idempotency key generation so hostname-targeted jobs stay stable
+- Updated SDK README with worker-hostname targeting example
+- Added Node type definitions to the SDK package config so the build recognizes `node:crypto`
+
 ## 1.0.4
 
 - Fixed intermittent race condition where `waitForCompletion(..., { fetchResultOnCompleted: true })` could observe `status: completed` while `/jobs/:id/result` was still temporarily `null`
