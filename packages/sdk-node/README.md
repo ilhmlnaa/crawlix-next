@@ -37,6 +37,12 @@ const hostnameJob = await client.createJob({
   targetWorkerHostname: "crawlix-worker-east-1",
 });
 
+const serviceNameJob = await client.createJob({
+  url: "https://example.com/heavy-page",
+  strategy: "playwright",
+  targetWorkerServiceName: "crawlix-worker-coolify",
+});
+
 const result = await client.waitForCompletion(job.jobId, {
   fetchResultOnCompleted: true,
 });
@@ -82,7 +88,7 @@ Backward compatibility note:
 - API key authenticated client
 - async job creation and polling
 - adaptive polling and adaptive create-and-wait helper
-- targeted worker dispatch support by worker ID or worker hostname
+- targeted worker dispatch support by worker ID, service name, or worker hostname
 - idempotent job creation support
 - webhook signature verification helpers
 - TypeScript-first public types

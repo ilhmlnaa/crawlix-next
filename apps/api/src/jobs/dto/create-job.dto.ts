@@ -64,6 +64,7 @@ export const CreateJobDtoSchema = z
     strategy: ScrapeStrategySchema.optional(),
     options: CreateJobOptionsDtoSchema.optional(),
     targetWorkerId: z.string().optional(),
+    targetWorkerServiceName: z.string().optional(),
     targetWorkerHostname: z.string().optional(),
     webhookUrl: z.string().url('Invalid webhook URL').optional(),
     webhookSecret: z.string().optional(),

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.6
+
+- Added `targetWorkerServiceName` to job creation input and payload types
+- Added service-name based worker resolution with round-robin selection when multiple workers share the same service name
+- Updated SDK README with a service-name targeting example
+- Kept hostname targeting support and existing worker ID targeting behavior
+
 ## 1.0.5
 
 - Added `targetWorkerHostname` to job creation input and public job/result payload types

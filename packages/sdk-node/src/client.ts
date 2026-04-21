@@ -234,6 +234,7 @@ export class CrawlixClient {
       strategy: input.strategy,
       options: input.options,
       targetWorkerId: input.targetWorkerId,
+      targetWorkerServiceName: input.targetWorkerServiceName,
       targetWorkerHostname: input.targetWorkerHostname,
       webhookUrl: input.webhookUrl,
     });

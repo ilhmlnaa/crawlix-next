@@ -83,6 +83,7 @@ export interface DashboardSessionValue {
     url: string,
     strategy: string,
     workerId?: string,
+    workerServiceName?: string,
     workerHostname?: string,
     options?: ScrapeJobOptions,
   ) => Promise<EnqueueJobResponse | null>;
@@ -295,6 +296,7 @@ export function DashboardSessionProvider({
     url: string,
     strategy: string,
     workerId?: string,
+    workerServiceName?: string,
     workerHostname?: string,
     options?: ScrapeJobOptions,
   ) => {
@@ -302,6 +304,9 @@ export function DashboardSessionProvider({
       url: url.trim(),
       strategy,
       ...(workerId ? { targetWorkerId: workerId } : {}),
+      ...(workerServiceName
+        ? { targetWorkerServiceName: workerServiceName }
+        : {}),
       ...(workerHostname ? { targetWorkerHostname: workerHostname } : {}),
       ...(options && Object.keys(options).length > 0 ? { options } : {}),
     };

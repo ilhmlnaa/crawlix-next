@@ -318,9 +318,9 @@ For backward compatibility, `PORT` is still accepted as a fallback. The lookup p
 - Worker: `WORKER_PORT` -> `PORT` -> `3002`
 - Dashboard: `DASHBOARD_PORT` -> `PORT` -> `3000`
 
-For hostname-targeted jobs, set `WORKER_HOSTNAME` to a stable logical name. If multiple workers share the same hostname, the API resolves the hostname to one active worker in round-robin order before publishing the job.
+For service-name-targeted jobs, set `WORKER_SERVICE_NAME` to a stable logical group name. If multiple workers share the same service name, the API resolves the service name to one active worker in round-robin order before publishing the job.
 
-Hostname groups are not a separate concept yet. If you later want strict group-based routing instead of hostname-based balancing, that can be added as a distinct field without changing the current worker targeting flow.
+`WORKER_HOSTNAME` is still supported for exact worker identity, but it is not the grouping key. If you later want strict group-based routing separate from service name, that can be added as a distinct field without changing the current worker targeting flow.
 
 This matters especially for Docker deployment:
 

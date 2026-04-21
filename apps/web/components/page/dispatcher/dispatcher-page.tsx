@@ -37,6 +37,7 @@ export function DispatcherPage() {
   const [url, setUrl] = useState("");
   const [strategy, setStrategy] = useState<ScrapeStrategy>("auto");
   const [workerId, setWorkerId] = useState("");
+  const [workerServiceName, setWorkerServiceName] = useState("");
   const [workerHostname, setWorkerHostname] = useState("");
   const [timeoutMs, setTimeoutMs] = useState("30000");
   const [maxRetries, setMaxRetries] = useState("2");
@@ -105,13 +106,14 @@ export function DispatcherPage() {
     url,
     strategy,
     targetWorkerId: workerId || undefined,
+    targetWorkerServiceName: workerServiceName.trim() || undefined,
     targetWorkerHostname: workerHostname.trim() || undefined,
     options: buildOptions(),
   });
 
   const applyPayloadFromJson = (payload: unknown): string | undefined => {
     if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-      return "Payload harus object JSON dengan format { url, strategy, targetWorkerId, targetWorkerHostname, options }";
+      return "Payload harus object JSON dengan format { url, strategy, targetWorkerId, targetWorkerServiceName, targetWorkerHostname, options }";
     }
 
     const root = payload as Record<string, unknown>;
@@ -134,6 +136,13 @@ export function DispatcherPage() {
       typeof root.targetWorkerId !== "string"
     ) {
       return "Field `targetWorkerId` harus berupa string";
+    }
+
+    if (
+      root.targetWorkerServiceName !== undefined &&
+      typeof root.targetWorkerServiceName !== "string"
+    ) {
+      return "Field `targetWorkerServiceName` harus berupa string";
     }
 
     if (
@@ -226,6 +235,11 @@ export function DispatcherPage() {
     setWorkerId(
       typeof root.targetWorkerId === "string" ? root.targetWorkerId : "",
     );
+    setWorkerServiceName(
+      typeof root.targetWorkerServiceName === "string"
+        ? root.targetWorkerServiceName
+        : "",
+    );
     setWorkerHostname(
       typeof root.targetWorkerHostname === "string"
         ? root.targetWorkerHostname
@@ -285,6 +299,7 @@ export function DispatcherPage() {
         url,
         strategy,
         workerId || undefined,
+        workerServiceName.trim() || undefined,
         workerHostname.trim() || undefined,
         buildOptions(),
       );
@@ -295,6 +310,7 @@ export function DispatcherPage() {
           url,
           strategy,
           targetWorkerId: workerId || undefined,
+          targetWorkerServiceName: workerServiceName.trim() || undefined,
           targetWorkerHostname: workerHostname.trim() || undefined,
           status: "queued",
           requestedAt: new Date().toISOString(),
@@ -457,6 +473,23 @@ export function DispatcherPage() {
 
               <div className="space-y-3">
                 <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  Target Worker Service Name
+                </label>
+                <Input
+                  placeholder="crawlix-worker-coolify"
+                  value={workerServiceName}
+                  onChange={(e) => setWorkerServiceName(e.target.value)}
+                  className="bg-[#121828] border-[#1a2235] text-slate-200 h-12 rounded-xl focus-visible:ring-indigo-500"
+                />
+                <p className="text-[11px] text-slate-600">
+                  Optional. Use this when the worker is identified by
+                  `WORKER_SERVICE_NAME`; this is the grouping key for
+                  round-robin targeting.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                   Target Worker Hostname
                 </label>
                 <Input
@@ -466,7 +499,8 @@ export function DispatcherPage() {
                   className="bg-[#121828] border-[#1a2235] text-slate-200 h-12 rounded-xl focus-visible:ring-indigo-500"
                 />
                 <p className="text-[11px] text-slate-600">
-                  Optional. If set together with worker ID, worker ID will be prioritized.
+                  Optional. If set together with worker ID, worker ID will be
+                  prioritized. Use this for exact host matching, not grouping.
                 </p>
               </div>
 
