@@ -142,7 +142,14 @@ export function WorkersPage() {
                     color="text-rose-400"
                   />
                   <MetaItem icon={Terminal} label="PID" value={worker.pid} />
-                  <MetaItem icon={Clock} label="Uptime" value="Live" />
+                  <MetaItem
+                    icon={Clock}
+                    label="Strategies"
+                    value={(worker.allowedStrategies ?? [
+                      "cloudscraper",
+                      "playwright",
+                    ]).join(", ")}
+                  />
                 </div>
 
                 {/* Current Operation */}

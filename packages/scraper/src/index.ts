@@ -9,11 +9,13 @@ import type {
   ScrapeJobResult,
   ScrapeStrategy,
   ScrapeWaitUntil,
+  WorkerAllowedStrategy,
 } from "@repo/queue-contracts";
 import { summarizeContent } from "@repo/shared";
 
 export interface ScrapeExecutionContext {
   config?: ScraperRuntimeConfig;
+  allowedStrategies?: WorkerAllowedStrategy[];
   onStageChange?: (
     stage: ScrapeJobStage,
     progress: number,
@@ -82,6 +84,13 @@ interface ScraperStrategy {
   ): Promise<ScraperStrategyResult>;
 }
 
+interface ResolvedScrapeExecutionContext {
+  config: ScraperRuntimeConfig;
+  allowedStrategies: WorkerAllowedStrategy[];
+  onStageChange: NonNullable<ScrapeExecutionContext["onStageChange"]>;
+  onEvent: NonNullable<ScrapeExecutionContext["onEvent"]>;
+}
+
 export interface ProxyResolution {
   enabled: boolean;
   proxyUrl?: string;
@@ -112,11 +121,78 @@ const PLAYWRIGHT_WAIT_TIMEOUT_CAP_MS = 10_000;
 
 function readConfig(
   context?: ScrapeExecutionContext,
-): Required<ScrapeExecutionContext> {
+): ResolvedScrapeExecutionContext {
+  const workerConfig = getWorkerRuntimeConfig();
+
   return {
-    config: context?.config ?? getWorkerRuntimeConfig().scraper,
+    config: context?.config ?? workerConfig.scraper,
+    allowedStrategies:
+      context?.allowedStrategies ?? workerConfig.allowedStrategies,
     onStageChange: context?.onStageChange ?? (() => undefined),
     onEvent: context?.onEvent ?? (() => undefined),
+  };
+}
+
+function resolveAutoPrimaryStrategy(
+  defaultStrategy: ScrapeStrategy,
+  allowedStrategies: WorkerAllowedStrategy[],
+): WorkerAllowedStrategy {
+  if (
+    defaultStrategy !== "auto" &&
+    allowedStrategies.includes(defaultStrategy)
+  ) {
+    return defaultStrategy;
+  }
+
+  if (allowedStrategies.includes("cloudscraper")) {
+    return "cloudscraper";
+  }
+
+  return "playwright";
+}
+
+function resolveStrategyPlan(
+  requestedStrategy: ScrapeStrategy,
+  defaultStrategy: ScrapeStrategy,
+  allowedStrategies: WorkerAllowedStrategy[],
+):
+  | {
+      primary: WorkerAllowedStrategy;
+      fallback?: WorkerAllowedStrategy;
+    }
+  | {
+      error: string;
+    } {
+  if (allowedStrategies.length === 0) {
+    return {
+      error:
+        "Worker strategy restriction: this worker has no enabled scrape strategies.",
+    };
+  }
+
+  if (
+    requestedStrategy !== "auto" &&
+    !allowedStrategies.includes(requestedStrategy)
+  ) {
+    return {
+      error: `Worker strategy restriction: requested "${requestedStrategy}" but this worker only allows [${allowedStrategies.join(", ")}].`,
+    };
+  }
+
+  if (requestedStrategy !== "auto") {
+    return {
+      primary: requestedStrategy,
+    };
+  }
+
+  const primary = resolveAutoPrimaryStrategy(defaultStrategy, allowedStrategies);
+
+  return {
+    primary,
+    fallback:
+      primary === "cloudscraper" && allowedStrategies.includes("playwright")
+        ? "playwright"
+        : undefined,
   };
 }
 
@@ -774,38 +850,42 @@ export class ScraperService {
     context?: ScrapeExecutionContext,
   ): Promise<ScrapeJobResult> {
     const resolvedContext = readConfig(context);
-    const strategy =
-      job.strategy === "auto"
-        ? resolvedContext.config.defaultStrategy
-        : job.strategy;
+    const strategyPlan = resolveStrategyPlan(
+      job.strategy,
+      resolvedContext.config.defaultStrategy,
+      resolvedContext.allowedStrategies,
+    );
+
+    if ("error" in strategyPlan) {
+      return createFailureResult(job, strategyPlan.error, 0);
+    }
+
     const maxRetries =
       job.options.maxRetries ?? resolvedContext.config.maxRetries;
     const retryDelayMs =
       job.options.retryDelayMs ?? resolvedContext.config.retryDelayMs;
-    const primaryStrategy = strategy === "auto" ? "cloudscraper" : strategy;
 
     await resolvedContext.onEvent({
       type: "strategy_selected",
-      strategy: primaryStrategy,
+      strategy: strategyPlan.primary,
       requestedStrategy: job.strategy,
     });
 
     for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
-      const currentStrategy = strategy === "auto" ? "cloudscraper" : strategy;
       await resolvedContext.onEvent({
         type: "attempt_started",
         attempt,
         maxRetries,
-        strategy: currentStrategy,
+        strategy: strategyPlan.primary,
       });
-      const primary = this.strategies[currentStrategy];
+      const primary = this.strategies[strategyPlan.primary];
       const execution = await primary.execute(job, resolvedContext);
 
       if (execution.success) {
         await resolvedContext.onEvent({
           type: "strategy_succeeded",
           attempt,
-          strategy: currentStrategy,
+          strategy: strategyPlan.primary,
           method: execution.method,
           responseTimeMs: execution.responseTimeMs,
         });
@@ -815,12 +895,12 @@ export class ScraperService {
       await resolvedContext.onEvent({
         type: "strategy_failed",
         attempt,
-        strategy: currentStrategy,
+        strategy: strategyPlan.primary,
         method: execution.method,
         error: execution.error,
       });
 
-      if (job.strategy === "auto" && currentStrategy === "cloudscraper") {
+      if (strategyPlan.fallback) {
         await resolvedContext.onEvent({
           type: "fallback_started",
           from: "cloudscraper",
@@ -828,7 +908,9 @@ export class ScraperService {
           attempt,
           reason: execution.error ?? "Primary strategy failed",
         });
-        const fallbackExecution = await this.strategies.playwright.execute(
+        const fallbackExecution = await this.strategies[
+          strategyPlan.fallback
+        ].execute(
           job,
           resolvedContext,
         );

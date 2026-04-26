@@ -11,6 +11,8 @@ import {
   type JobsOverviewTimeSeriesTimeframe,
   type ScrapeJobMessage,
   type ScrapeJobRecord,
+  type ScrapeStrategy,
+  type WorkerAllowedStrategy,
   type WorkerHeartbeat,
 } from '@repo/queue-contracts';
 import { createJobId, createQueueFingerprint, nowIso } from '@repo/shared';
@@ -48,6 +50,32 @@ export class JobsService {
 
   private invalidateOverviewCache() {
     this.overviewCache.clear();
+  }
+
+  private getWorkerAllowedStrategies(
+    worker: WorkerHeartbeat,
+  ): WorkerAllowedStrategy[] {
+    return worker.allowedStrategies?.length
+      ? worker.allowedStrategies
+      : ['cloudscraper', 'playwright'];
+  }
+
+  private ensureWorkerSupportsStrategy(
+    worker: WorkerHeartbeat,
+    strategy: ScrapeStrategy,
+  ) {
+    if (strategy === 'auto') {
+      return;
+    }
+
+    const allowedStrategies = this.getWorkerAllowedStrategies(worker);
+    if (allowedStrategies.includes(strategy)) {
+      return;
+    }
+
+    throw new NotFoundException(
+      `Target worker "${worker.workerId}" does not support strategy "${strategy}". Allowed strategies: ${allowedStrategies.join(', ')}`,
+    );
   }
 
   private pruneOverviewCache() {
@@ -177,25 +205,30 @@ export class JobsService {
           `Target worker "${targetWorkerId}" is not active`,
         );
       }
+      this.ensureWorkerSupportsStrategy(worker, strategy);
     } else if (targetWorkerServiceName) {
       const worker = await this.workerRegistry.resolveWorkerByServiceName(
         targetWorkerServiceName,
+        strategy,
       );
 
       if (!worker) {
         throw new NotFoundException(
-          `No active workers found for service name "${targetWorkerServiceName}"`,
+          `No active workers found for service name "${targetWorkerServiceName}" with strategy "${strategy}"`,
         );
       }
 
       targetWorkerId = worker.workerId;
     } else if (targetWorkerHostname) {
       const worker =
-        await this.workerRegistry.resolveWorkerByHostname(targetWorkerHostname);
+        await this.workerRegistry.resolveWorkerByHostname(
+          targetWorkerHostname,
+          strategy,
+        );
 
       if (!worker) {
         throw new NotFoundException(
-          `No active workers found for hostname "${targetWorkerHostname}"`,
+          `No active workers found for hostname "${targetWorkerHostname}" with strategy "${strategy}"`,
         );
       }
 

@@ -265,6 +265,7 @@ For standard local development, use the root `.env` file. The repository already
 | `API_PORT`                          | Dedicated port for the NestJS API                  |
 | `WORKER_PORT`                       | Dedicated port for the NestJS worker               |
 | `WORKER_HOSTNAME`                   | Logical hostname label used for worker targeting   |
+| `WORKER_ALLOWED_STRATEGIES`         | Strategy capability exposed and enforced per worker |
 | `DASHBOARD_PORT`                    | Dedicated port for the Next.js dashboard runtime   |
 | `RABBITMQ_URL`                      | RabbitMQ connection string                         |
 | `REDIS_URL`                         | Redis connection string                            |
@@ -321,6 +322,14 @@ For backward compatibility, `PORT` is still accepted as a fallback. The lookup p
 For service-name-targeted jobs, set `WORKER_SERVICE_NAME` to a stable logical group name. If multiple workers share the same service name, the API resolves the service name to one active worker in round-robin order before publishing the job.
 
 `WORKER_HOSTNAME` is still supported for exact worker identity, but it is not the grouping key. If you later want strict group-based routing separate from service name, that can be added as a distinct field without changing the current worker targeting flow.
+
+`WORKER_ALLOWED_STRATEGIES` controls which scrape engines a worker is allowed to execute. Supported values are comma-separated `cloudscraper` and `playwright`. Examples:
+
+- `WORKER_ALLOWED_STRATEGIES=cloudscraper`
+- `WORKER_ALLOWED_STRATEGIES=playwright`
+- `WORKER_ALLOWED_STRATEGIES=cloudscraper,playwright`
+
+This variable is enforced by the worker at execution time and is also published in worker heartbeat metadata so targeted dispatch can avoid incompatible workers. `SCRAPER_DEFAULT_STRATEGY` remains the job-level default, while `WORKER_ALLOWED_STRATEGIES` defines runtime capability for that worker instance.
 
 This matters especially for Docker deployment:
 

@@ -17,6 +17,7 @@ export type ScrapeJobStage =
   | "completed";
 
 export type ScrapeStrategy = "cloudscraper" | "playwright" | "auto";
+export type WorkerAllowedStrategy = Exclude<ScrapeStrategy, "auto">;
 
 export type ScrapeWaitUntil =
   | "load"
@@ -161,6 +162,7 @@ export interface WorkerHeartbeat {
   targetedQueueName: string;
   retryQueueName: string;
   deadLetterQueueName: string;
+  allowedStrategies: WorkerAllowedStrategy[];
   hostname: string;
   pid: number;
   status: "idle" | "processing";

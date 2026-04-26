@@ -24,6 +24,7 @@ describe('QueueConsumerService retry and DLQ flow', () => {
     process.env.REDIS_JOB_PREFIX = 'crawlix:test';
     process.env.RESULT_TTL_SECONDS = '3600';
     process.env.SCRAPER_DEFAULT_STRATEGY = 'auto';
+    process.env.WORKER_ALLOWED_STRATEGIES = 'cloudscraper,playwright';
     process.env.SCRAPER_TIMEOUT_MS = '30000';
     process.env.SCRAPER_CACHE_TTL_SECONDS = '900';
     process.env.SCRAPER_MAX_RETRIES = '2';

@@ -12,6 +12,7 @@ class FakeRedisClient {
   private readonly values = new Map<string, string>();
   private readonly lists = new Map<string, string[]>();
   private readonly sets = new Map<string, Set<string>>();
+  private readonly counters = new Map<string, number>();
 
   async connect() {
     return this;
@@ -77,6 +78,12 @@ class FakeRedisClient {
     const current = this.sets.get(key);
     current?.delete(value);
     return 1;
+  }
+
+  async incr(key: string) {
+    const next = (this.counters.get(key) ?? 0) + 1;
+    this.counters.set(key, next);
+    return next;
   }
 }
 
@@ -153,6 +160,7 @@ describe('API auth and jobs flow (e2e)', () => {
       targetedQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567',
       retryQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567.retry',
       deadLetterQueueName: 'crawlix.scrape.jobs.worker.worker-host123-4567.dlq',
+      allowedStrategies: ['cloudscraper'],
       hostname: 'host123',
       pid: 4567,
       status: 'idle',
@@ -160,6 +168,22 @@ describe('API auth and jobs flow (e2e)', () => {
       lastSeenAt: new Date().toISOString(),
       processedCount: 11,
       failedCount: 1,
+    });
+    await fakeRedis.seedWorker({
+      workerId: 'worker-host124-4568',
+      serviceName: 'crawlix-worker',
+      queueName: 'crawlix.scrape.jobs',
+      targetedQueueName: 'crawlix.scrape.jobs.worker.worker-host124-4568',
+      retryQueueName: 'crawlix.scrape.jobs.worker.worker-host124-4568.retry',
+      deadLetterQueueName: 'crawlix.scrape.jobs.worker.worker-host124-4568.dlq',
+      allowedStrategies: ['playwright'],
+      hostname: 'host123',
+      pid: 4568,
+      status: 'idle',
+      startedAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+      processedCount: 7,
+      failedCount: 0,
     });
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -227,7 +251,7 @@ describe('API auth and jobs flow (e2e)', () => {
 
     const workersResponse = await agent.get('/api/workers').expect(200);
     expect(Array.isArray(workersResponse.body)).toBe(true);
-    expect(workersResponse.body[0].workerId).toBe('worker-host123-4567');
+    expect(workersResponse.body[0].allowedStrategies).toBeDefined();
 
     await request(app)
       .post('/api/jobs')
@@ -257,6 +281,40 @@ describe('API auth and jobs flow (e2e)', () => {
         targetWorkerId: 'worker-host123-4567',
       })
       .expect(201);
+
+    await request(app)
+      .post('/api/jobs')
+      .set('x-api-key', apiKey)
+      .send({
+        url: 'https://example.org/playwright',
+        strategy: 'playwright',
+        targetWorkerId: 'worker-host123-4567',
+      })
+      .expect(404);
+
+    const targetedByService = await request(app)
+      .post('/api/jobs')
+      .set('x-api-key', apiKey)
+      .send({
+        url: 'https://example.org/by-service',
+        strategy: 'playwright',
+        targetWorkerServiceName: 'crawlix-worker',
+      })
+      .expect(201);
+
+    expect(targetedByService.body.targetWorkerId).toBe('worker-host124-4568');
+
+    const targetedByHostname = await request(app)
+      .post('/api/jobs')
+      .set('x-api-key', apiKey)
+      .send({
+        url: 'https://example.org/by-host',
+        strategy: 'playwright',
+        targetWorkerHostname: 'host123',
+      })
+      .expect(201);
+
+    expect(targetedByHostname.body.targetWorkerId).toBe('worker-host124-4568');
 
     expect(targetedEnqueue.body.targetWorkerId).toBe('worker-host123-4567');
 

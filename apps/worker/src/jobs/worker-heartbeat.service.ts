@@ -84,6 +84,7 @@ export class WorkerHeartbeatService
       targetedQueueName: targetedQueues.queueName,
       retryQueueName: targetedQueues.retryQueueName,
       deadLetterQueueName: targetedQueues.deadLetterQueueName,
+      allowedStrategies: this.config.allowedStrategies,
       hostname: this.workerHostname,
       pid: process.pid,
       status: this.status,
@@ -117,6 +118,7 @@ export class WorkerHeartbeatService
         status: this.status,
         queueName: this.config.queue.queueName,
         targetedQueueName: this.getTargetedQueues().queueName,
+        allowedStrategies: this.config.allowedStrategies,
       }),
     );
     this.timer = setInterval(() => {

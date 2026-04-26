@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { getApiRuntimeConfig } from '@repo/config';
-import type { WorkerHeartbeat } from '@repo/queue-contracts';
+import type {
+  ScrapeStrategy,
+  WorkerAllowedStrategy,
+  WorkerHeartbeat,
+} from '@repo/queue-contracts';
 import {
   createWorkerHeartbeatKey,
   createWorkerHostnameRoundRobinKey,
@@ -14,6 +18,50 @@ export class WorkerRegistryService {
 
   private get config() {
     return getApiRuntimeConfig();
+  }
+
+  private getAllowedStrategies(
+    worker: WorkerHeartbeat,
+  ): WorkerAllowedStrategy[] {
+    return worker.allowedStrategies?.length
+      ? worker.allowedStrategies
+      : ['cloudscraper', 'playwright'];
+  }
+
+  private supportsStrategy(
+    worker: WorkerHeartbeat,
+    strategy?: ScrapeStrategy,
+  ): boolean {
+    if (!strategy) {
+      return true;
+    }
+
+    const allowedStrategies = this.getAllowedStrategies(worker);
+    return strategy === 'auto' || allowedStrategies.includes(strategy);
+  }
+
+  private async resolveWorkerWithRoundRobin(
+    workers: WorkerHeartbeat[],
+    rotationKey: string,
+  ): Promise<WorkerHeartbeat | null> {
+    const sortedWorkers = [...workers].sort((left, right) =>
+      left.workerId.localeCompare(right.workerId),
+    );
+
+    if (sortedWorkers.length === 0) {
+      return null;
+    }
+
+    if (sortedWorkers.length === 1) {
+      return sortedWorkers[0] ?? null;
+    }
+
+    const client = this.redisService.getClient();
+    await client.connect().catch(() => undefined);
+    const nextRotation = await client.incr(rotationKey);
+    const index = (nextRotation - 1) % sortedWorkers.length;
+
+    return sortedWorkers[index] ?? sortedWorkers[0] ?? null;
   }
 
   async listWorkers(): Promise<WorkerHeartbeat[]> {
@@ -68,31 +116,18 @@ export class WorkerRegistryService {
 
   async resolveWorkerByServiceName(
     serviceName: string,
+    strategy?: ScrapeStrategy,
   ): Promise<WorkerHeartbeat | null> {
     const trimmedServiceName = serviceName.trim();
     if (!trimmedServiceName) {
       return null;
     }
 
-    const workers = (
-      await this.getWorkersByServiceName(trimmedServiceName)
-    ).sort((left, right) => left.workerId.localeCompare(right.workerId));
-
-    if (workers.length === 0) {
-      return null;
-    }
-
-    if (workers.length === 1) {
-      return workers[0];
-    }
-
-    const client = this.redisService.getClient();
-    await client.connect().catch(() => undefined);
+    const workers = (await this.getWorkersByServiceName(trimmedServiceName))
+      .filter((worker) => this.supportsStrategy(worker, strategy));
     const rotationKey = `${this.config.redis.jobPrefix}:worker-service:${trimmedServiceName}:rr`;
-    const nextRotation = await client.incr(rotationKey);
-    const index = (nextRotation - 1) % workers.length;
 
-    return workers[index] ?? workers[0] ?? null;
+    return this.resolveWorkerWithRoundRobin(workers, rotationKey);
   }
 
   async getWorkersByHostname(hostname: string): Promise<WorkerHeartbeat[]> {
@@ -107,33 +142,21 @@ export class WorkerRegistryService {
 
   async resolveWorkerByHostname(
     hostname: string,
+    strategy?: ScrapeStrategy,
   ): Promise<WorkerHeartbeat | null> {
     const trimmedHostname = hostname.trim();
     if (!trimmedHostname) {
       return null;
     }
 
-    const workers = (await this.getWorkersByHostname(trimmedHostname)).sort(
-      (left, right) => left.workerId.localeCompare(right.workerId),
+    const workers = (await this.getWorkersByHostname(trimmedHostname)).filter(
+      (worker) => this.supportsStrategy(worker, strategy),
     );
-
-    if (workers.length === 0) {
-      return null;
-    }
-
-    if (workers.length === 1) {
-      return workers[0];
-    }
-
-    const client = this.redisService.getClient();
-    await client.connect().catch(() => undefined);
     const rotationKey = createWorkerHostnameRoundRobinKey(
       this.config.redis.jobPrefix,
       trimmedHostname,
     );
-    const nextRotation = await client.incr(rotationKey);
-    const index = (nextRotation - 1) % workers.length;
 
-    return workers[index] ?? workers[0] ?? null;
+    return this.resolveWorkerWithRoundRobin(workers, rotationKey);
   }
 }

@@ -39,6 +39,7 @@ export interface WorkerRuntimeConfig {
   port: number;
   processingWatchdogTimeoutMs: number;
   workerConcurrency: number;
+  allowedStrategies: Array<Exclude<ScraperRuntimeConfig["defaultStrategy"], "auto">>;
   queue: QueueConfig;
   redis: RedisConfig;
   scraper: ScraperRuntimeConfig;
@@ -85,6 +86,23 @@ function readNumber(value: string | undefined, fallback: number): number {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function parseAllowedStrategies(
+  value: string | undefined,
+): Array<Exclude<ScraperRuntimeConfig["defaultStrategy"], "auto">> {
+  const parsed = (value ?? "cloudscraper,playwright")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter(
+      (
+        item,
+      ): item is Exclude<ScraperRuntimeConfig["defaultStrategy"], "auto"> =>
+        item === "cloudscraper" || item === "playwright",
+    );
+
+  return Array.from(new Set(parsed));
 }
 
 function readPort(
@@ -303,6 +321,23 @@ export function validateApiRuntimeConfig(
 export function validateWorkerRuntimeConfig(
   config: WorkerRuntimeConfig,
 ): WorkerRuntimeConfig {
+  const allowedStrategies = Array.from(new Set(config.allowedStrategies));
+
+  if (allowedStrategies.length === 0) {
+    throw new Error(
+      "WORKER_ALLOWED_STRATEGIES must include at least one strategy",
+    );
+  }
+
+  if (
+    config.scraper.defaultStrategy !== "auto" &&
+    !allowedStrategies.includes(config.scraper.defaultStrategy)
+  ) {
+    throw new Error(
+      `SCRAPER_DEFAULT_STRATEGY "${config.scraper.defaultStrategy}" is not included in WORKER_ALLOWED_STRATEGIES`,
+    );
+  }
+
   return {
     ...config,
     serviceName: assertNonEmpty(config.serviceName, "WORKER_SERVICE_NAME"),
@@ -316,6 +351,7 @@ export function validateWorkerRuntimeConfig(
       config.workerConcurrency,
       "WORKER_CONCURRENCY",
     ),
+    allowedStrategies,
     queue: validateQueueConfig(config.queue),
     redis: validateRedisConfig(config.redis),
     scraper: validateScraperConfig(config.scraper),
@@ -423,6 +459,7 @@ export function getWorkerRuntimeConfig(
       5 * 60 * 1000,
     ),
     workerConcurrency: readNumber(env.WORKER_CONCURRENCY, 2),
+    allowedStrategies: parseAllowedStrategies(env.WORKER_ALLOWED_STRATEGIES),
     queue: readQueueConfig(env),
     redis: readRedisConfig(env),
     scraper: readScraperConfig(env),

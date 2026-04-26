@@ -2,7 +2,11 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { getWorkerRuntimeConfig } from '@repo/config';
 import { ScraperService } from '@repo/scraper';
 import { resolveProxySettings } from '@repo/scraper';
-import type { ScrapeJobMessage } from '@repo/queue-contracts';
+import type {
+  ScrapeJobMessage,
+  ScrapeStrategy,
+  WorkerAllowedStrategy,
+} from '@repo/queue-contracts';
 import { JobStoreService } from './job-store.service';
 import { ScrapeCacheService } from './scrape-cache.service';
 import { WorkerHeartbeatService } from './worker-heartbeat.service';
@@ -20,7 +24,16 @@ export class JobProcessorService implements OnModuleDestroy {
     private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
+  private isStrategyAllowed(
+    strategy: ScrapeStrategy,
+    allowedStrategies: WorkerAllowedStrategy[],
+  ) {
+    return strategy === 'auto' || allowedStrategies.includes(strategy);
+  }
+
   async process(job: ScrapeJobMessage): Promise<void> {
+    const config = getWorkerRuntimeConfig();
+    const allowedStrategies = config.allowedStrategies;
     const startedAt = Date.now();
     const record = await this.jobStore.getRecord(job.jobId);
     this.logger.log(
@@ -92,12 +105,18 @@ export class JobProcessorService implements OnModuleDestroy {
     await this.jobStore.updateProgress(job.jobId, 5, 'fetching');
     const proxySettings = resolveProxySettings(
       job.options,
-      getWorkerRuntimeConfig().scraper,
+      config.scraper,
     );
     await this.jobStore.patchRecord(job.jobId, {
       proxyEnabled: proxySettings.enabled,
       proxyUrl: proxySettings.proxyUrl,
     });
+
+    if (!this.isStrategyAllowed(job.strategy, allowedStrategies)) {
+      throw new Error(
+        `Worker strategy restriction: requested "${job.strategy}" but this worker only allows [${allowedStrategies.join(', ')}].`,
+      );
+    }
 
     try {
       const cachedResult =
@@ -118,6 +137,8 @@ export class JobProcessorService implements OnModuleDestroy {
       const executionResult =
         cachedResult ??
         (await this.scraper.execute(job, {
+          allowedStrategies,
+          config: config.scraper,
           onStageChange: async (stage, progress) => {
             await this.jobStore.updateProgress(job.jobId, progress, stage);
           },
