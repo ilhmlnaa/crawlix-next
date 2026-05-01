@@ -186,7 +186,7 @@ export function OverviewPage() {
   return (
     <div className="relative w-full min-w-0 space-y-8 pb-10 z-0">
       {/* Decorative Top-Right Grid Background */}
-      <div className="fixed top-0 left-1/2 h-[100vh] w-[100vw] -translate-x-1/2 pointer-events-none -z-50 overflow-hidden">
+      <div className="fixed top-0 left-1/2 h-screen w-screen -translate-x-1/2 pointer-events-none -z-50 overflow-hidden">
         <div
           className="absolute inset-y-0 right-0 left-[20%] bg-[linear-gradient(to_right,rgba(99,102,241,0.15)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.15)_1px,transparent_1px)]"
           style={{
@@ -197,7 +197,7 @@ export function OverviewPage() {
               "radial-gradient(ellipse 80% 60% at 100% 0%, #000 70%, transparent 100%)",
           }}
         />
-        <div className="absolute right-0 top-0 h-[600px] w-[600px] -translate-y-1/3 translate-x-1/3 rounded-full bg-indigo-600/20 blur-[120px]" />
+        <div className="absolute right-0 top-0 h-150 w-150 -translate-y-1/3 translate-x-1/3 rounded-full bg-indigo-600/20 blur-[120px]" />
       </div>
 
       {/* Top Welcome Title */}

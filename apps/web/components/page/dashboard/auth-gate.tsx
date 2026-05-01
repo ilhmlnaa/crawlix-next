@@ -2,7 +2,7 @@
 
 import { LoaderCircle } from "lucide-react";
 import { useDashboardSession } from "@/components/page/dashboard/session-provider";
-import { LoginPanel } from "@/app/login-panel";
+import { LoginPanel } from "@/components/page/dashboard/login-panel";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const {

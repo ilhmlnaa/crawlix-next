@@ -137,10 +137,9 @@ export function DashboardSessionProvider({
   const [loadingOverviewTimeSeries, setLoadingOverviewTimeSeries] =
     useState(false);
   const [queueChartTimeframe, setQueueChartTimeframe] =
-    useState<JobsOverviewTimeSeriesTimeframe>("day");
-  const timeframeRef = useRef<JobsOverviewTimeSeriesTimeframe>("day");
+    useState<JobsOverviewTimeSeriesTimeframe>("hour");
+  const timeframeRef = useRef<JobsOverviewTimeSeriesTimeframe>("hour");
 
-  // Keep ref in sync with state
   useEffect(() => {
     timeframeRef.current = queueChartTimeframe;
   }, [queueChartTimeframe]);
@@ -155,7 +154,7 @@ export function DashboardSessionProvider({
   }, [apiBaseUrl]);
 
   const loadOverviewTimeSeries = useCallback(
-    async (timeframe: JobsOverviewTimeSeriesTimeframe = "day") => {
+    async (timeframe: JobsOverviewTimeSeriesTimeframe = "hour") => {
       setLoadingOverviewTimeSeries(true);
       const snapshot = await fetchJson<JobsOverviewTimeSeriesSnapshot>(
         `${apiBaseUrl}/jobs/overview/time-series?timeframe=${timeframe}`,
