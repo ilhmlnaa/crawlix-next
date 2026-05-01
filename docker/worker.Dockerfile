@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 RUN corepack enable && corepack prepare pnpm@latest --activate
@@ -6,7 +6,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@repo/worker...
 
-FROM node:22-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY . .
@@ -14,7 +14,7 @@ COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/packages ./packages
 RUN pnpm --filter=@repo/worker --prod deploy /app/pruned
 
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache \
     chromium \

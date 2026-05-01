@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
@@ -7,7 +7,7 @@ COPY packages ./packages
 RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@repo/web...
 
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV DASHBOARD_PORT=3000

@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
@@ -8,7 +8,7 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm turbo run build --filter=@repo/api...
 RUN pnpm deploy --filter=@repo/api --prod /prod/api
 
-FROM node:22-alpine AS runner
+FROM node:24-alpine AS runner
 WORKDIR /app
 COPY --from=builder /prod/api/node_modules ./apps/api/node_modules
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
