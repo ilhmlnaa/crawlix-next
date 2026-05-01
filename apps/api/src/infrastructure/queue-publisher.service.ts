@@ -2,13 +2,16 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import amqp, { type Channel, type ChannelModel } from 'amqplib';
 import { getApiRuntimeConfig } from '@repo/config';
 import type {
+  RoutingStrategy,
   ScrapeJobMessage,
   WebhookDeliveryMessage,
 } from '@repo/queue-contracts';
 import {
-  createTargetedDeadLetterQueueName,
-  createTargetedQueueName,
-  createTargetedRetryQueueName,
+  createStrategyQueueNames,
+  createStrategyQueueName,
+  createStrategyRetryQueueName,
+  createStrategyDeadLetterQueueName,
+  resolveRoutingStrategy,
 } from '@repo/shared';
 
 export interface QueueStatsSnapshot {
@@ -26,6 +29,10 @@ export class QueuePublisherService implements OnModuleDestroy {
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
 
+  private get sharedRoutingStrategies(): RoutingStrategy[] {
+    return ['cloudscraper', 'playwright'];
+  }
+
   private async getChannel(): Promise<Channel> {
     if (this.channel) {
       return this.channel;
@@ -38,14 +45,31 @@ export class QueuePublisherService implements OnModuleDestroy {
     await channel.assertQueue(config.queue.queueName, {
       durable: true,
     });
-    await channel.assertQueue(config.queue.retryQueueName, {
-      durable: true,
-      deadLetterExchange: '',
-      deadLetterRoutingKey: config.queue.queueName,
-    });
-    await channel.assertQueue(config.queue.deadLetterQueueName, {
-      durable: true,
-    });
+    for (const routingStrategy of this.sharedRoutingStrategies) {
+      await channel.assertQueue(
+        createStrategyQueueName(config.queue.queueName, routingStrategy),
+        {
+          durable: true,
+        },
+      );
+      await channel.assertQueue(
+        createStrategyRetryQueueName(config.queue.queueName, routingStrategy),
+        {
+          durable: true,
+          deadLetterExchange: '',
+          deadLetterRoutingKey: createStrategyQueueName(
+            config.queue.queueName,
+            routingStrategy,
+          ),
+        },
+      );
+      await channel.assertQueue(
+        createStrategyDeadLetterQueueName(config.queue.queueName, routingStrategy),
+        {
+          durable: true,
+        },
+      );
+    }
     await channel.assertQueue(config.queue.webhookQueueName, {
       durable: true,
     });
@@ -64,35 +88,25 @@ export class QueuePublisherService implements OnModuleDestroy {
     return channel;
   }
 
-  private resolveQueues(targetWorkerId?: string) {
+  private resolveQueues(
+    routingStrategy: RoutingStrategy,
+    targetWorkerId?: string,
+  ) {
     const config = getApiRuntimeConfig();
-    if (!targetWorkerId) {
-      return {
-        queueName: config.queue.queueName,
-        retryQueueName: config.queue.retryQueueName,
-        deadLetterQueueName: config.queue.deadLetterQueueName,
-      };
-    }
 
-    return {
-      queueName: createTargetedQueueName(
-        config.queue.queueName,
-        targetWorkerId,
-      ),
-      retryQueueName: createTargetedRetryQueueName(
-        config.queue.queueName,
-        targetWorkerId,
-      ),
-      deadLetterQueueName: createTargetedDeadLetterQueueName(
-        config.queue.queueName,
-        targetWorkerId,
-      ),
-    };
+    return createStrategyQueueNames(
+      config.queue.queueName,
+      routingStrategy,
+      targetWorkerId,
+    );
   }
 
-  private async assertQueuesForTarget(targetWorkerId?: string) {
+  private async assertQueuesForTarget(
+    routingStrategy: RoutingStrategy,
+    targetWorkerId?: string,
+  ) {
     const channel = await this.getChannel();
-    const queues = this.resolveQueues(targetWorkerId);
+    const queues = this.resolveQueues(routingStrategy, targetWorkerId);
 
     await channel.assertQueue(queues.queueName, {
       durable: true,
@@ -110,7 +124,9 @@ export class QueuePublisherService implements OnModuleDestroy {
   }
 
   async publish(job: ScrapeJobMessage): Promise<void> {
+    const routingStrategy = resolveRoutingStrategy(job.strategy);
     const { channel, queues } = await this.assertQueuesForTarget(
+      routingStrategy,
       job.targetWorkerId,
     );
 
@@ -123,7 +139,9 @@ export class QueuePublisherService implements OnModuleDestroy {
     job: ScrapeJobMessage,
     deliveryAttempt: number,
   ): Promise<void> {
+    const routingStrategy = resolveRoutingStrategy(job.strategy);
     const { channel, queues } = await this.assertQueuesForTarget(
+      routingStrategy,
       job.targetWorkerId,
     );
 
@@ -150,7 +168,9 @@ export class QueuePublisherService implements OnModuleDestroy {
     deliveryAttempt: number,
     reason: string,
   ): Promise<void> {
+    const routingStrategy = resolveRoutingStrategy(job.strategy);
     const { channel, queues } = await this.assertQueuesForTarget(
+      routingStrategy,
       job.targetWorkerId,
     );
 
@@ -177,26 +197,51 @@ export class QueuePublisherService implements OnModuleDestroy {
     const channel = await this.getChannel();
     const config = getApiRuntimeConfig();
     const [
-      state,
-      retryState,
-      deadLetterState,
+      cloudscraperState,
+      playwrightState,
+      cloudscraperRetryState,
+      playwrightRetryState,
+      cloudscraperDeadLetterState,
+      playwrightDeadLetterState,
       webhookState,
       webhookRetryState,
       webhookDeadLetterState,
     ] = await Promise.all([
-      channel.checkQueue(config.queue.queueName),
-      channel.checkQueue(config.queue.retryQueueName),
-      channel.checkQueue(config.queue.deadLetterQueueName),
+      channel.checkQueue(
+        createStrategyQueueName(config.queue.queueName, 'cloudscraper'),
+      ),
+      channel.checkQueue(
+        createStrategyQueueName(config.queue.queueName, 'playwright'),
+      ),
+      channel.checkQueue(
+        createStrategyRetryQueueName(config.queue.queueName, 'cloudscraper'),
+      ),
+      channel.checkQueue(
+        createStrategyRetryQueueName(config.queue.queueName, 'playwright'),
+      ),
+      channel.checkQueue(
+        createStrategyDeadLetterQueueName(
+          config.queue.queueName,
+          'cloudscraper',
+        ),
+      ),
+      channel.checkQueue(
+        createStrategyDeadLetterQueueName(config.queue.queueName, 'playwright'),
+      ),
       channel.checkQueue(config.queue.webhookQueueName),
       channel.checkQueue(config.queue.webhookRetryQueueName),
       channel.checkQueue(config.queue.webhookDeadLetterQueueName),
     ]);
 
     return {
-      messageCount: state.messageCount,
-      consumerCount: state.consumerCount,
-      retryMessageCount: retryState.messageCount,
-      deadLetterMessageCount: deadLetterState.messageCount,
+      messageCount: cloudscraperState.messageCount + playwrightState.messageCount,
+      consumerCount:
+        cloudscraperState.consumerCount + playwrightState.consumerCount,
+      retryMessageCount:
+        cloudscraperRetryState.messageCount + playwrightRetryState.messageCount,
+      deadLetterMessageCount:
+        cloudscraperDeadLetterState.messageCount +
+        playwrightDeadLetterState.messageCount,
       webhookMessageCount: webhookState.messageCount,
       webhookRetryMessageCount: webhookRetryState.messageCount,
       webhookDeadLetterMessageCount: webhookDeadLetterState.messageCount,

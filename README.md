@@ -331,6 +331,13 @@ For service-name-targeted jobs, set `WORKER_SERVICE_NAME` to a stable logical gr
 
 This variable is enforced by the worker at execution time and is also published in worker heartbeat metadata so targeted dispatch can avoid incompatible workers. `SCRAPER_DEFAULT_STRATEGY` remains the job-level default, while `WORKER_ALLOWED_STRATEGIES` defines runtime capability for that worker instance.
 
+Non-targeted jobs are routed into strategy-specific shared queues:
+
+- `crawlix.scrape.jobs.cloudscraper`
+- `crawlix.scrape.jobs.playwright`
+
+`strategy=auto` is published to the `cloudscraper` queue by default. Exact `targetWorkerId` remains strict, while `targetWorkerServiceName` and `targetWorkerHostname` can still resolve to another compatible worker inside the same logical group.
+
 This matters especially for Docker deployment:
 
 - `api` and `worker` can use environment variables directly at runtime

@@ -88,7 +88,7 @@ describe('QueueConsumerService retry and DLQ flow', () => {
       'temporary failure',
     );
     expect(channel.sendToQueue).toHaveBeenCalledWith(
-      'crawlix.scrape.jobs.retry',
+      'crawlix.scrape.jobs.cloudscraper.retry',
       expect.any(Buffer),
       expect.objectContaining({
         expiration: '15000',
@@ -160,7 +160,7 @@ describe('QueueConsumerService retry and DLQ flow', () => {
       }),
     );
     expect(channel.sendToQueue).toHaveBeenCalledWith(
-      'crawlix.scrape.jobs.dlq',
+      'crawlix.scrape.jobs.cloudscraper.dlq',
       expect.any(Buffer),
       expect.any(Object),
     );
@@ -220,7 +220,67 @@ describe('QueueConsumerService retry and DLQ flow', () => {
     ).handleMessage(message);
 
     expect(channel.sendToQueue).toHaveBeenCalledWith(
-      'crawlix.scrape.jobs.worker.worker-host123-4567.retry',
+      'crawlix.scrape.jobs.cloudscraper.worker.worker-host123-4567.retry',
+      expect.any(Buffer),
+      expect.objectContaining({
+        expiration: '15000',
+      }),
+    );
+  });
+
+  it('routes explicit playwright jobs into playwright retry queue', async () => {
+    const processor = {
+      process: jest.fn().mockRejectedValue(new Error('temporary failure')),
+    };
+    const jobStore = {
+      updateStatus: jest.fn().mockResolvedValue(null),
+      updateProgress: jest.fn().mockResolvedValue(null),
+      saveResult: jest.fn().mockResolvedValue(undefined),
+    };
+    const webhookDispatcher = {
+      enqueueFromResult: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new QueueConsumerService(
+      processor as never,
+      jobStore as never,
+      workerHeartbeat as never,
+      webhookDispatcher as never,
+    );
+
+    const channel = {
+      sendToQueue: jest.fn(),
+      ack: jest.fn(),
+    };
+
+    (service as unknown as { channel: typeof channel }).channel = channel;
+
+    const message = {
+      content: Buffer.from(
+        JSON.stringify({
+          jobId: 'job-4',
+          url: 'https://playwright.example.com',
+          strategy: 'playwright',
+          options: {},
+          requestedAt: new Date().toISOString(),
+          fingerprint: 'fingerprint-4',
+        }),
+      ),
+      properties: {
+        headers: {
+          'x-delivery-attempt': 1,
+        },
+      },
+    } as unknown as ConsumeMessage;
+
+    await (
+      service as unknown as {
+        handleMessage: (message: ConsumeMessage) => Promise<void>;
+      }
+    ).handleMessage(message);
+
+    expect(channel.sendToQueue).toHaveBeenCalledWith(
+      'crawlix.scrape.jobs.playwright.retry',
       expect.any(Buffer),
       expect.objectContaining({
         expiration: '15000',

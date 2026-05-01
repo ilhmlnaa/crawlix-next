@@ -10,11 +10,15 @@ import amqp, {
   type ConsumeMessage,
 } from 'amqplib';
 import { getWorkerRuntimeConfig } from '@repo/config';
-import type { ScrapeJobMessage } from '@repo/queue-contracts';
+import type {
+  RoutingStrategy,
+  ScrapeJobMessage,
+} from '@repo/queue-contracts';
 import {
-  createTargetedDeadLetterQueueName,
-  createTargetedQueueName,
-  createTargetedRetryQueueName,
+  createStrategyDeadLetterQueueName,
+  createStrategyQueueName,
+  createStrategyQueueNames,
+  resolveRoutingStrategy,
 } from '@repo/shared';
 import { JobProcessorService } from './job-processor.service';
 import { JobStoreService } from './job-store.service';
@@ -34,6 +38,7 @@ export class QueueConsumerService
   private connection: ChannelModel | null = null;
   private channel: Channel | null = null;
   private consuming = false;
+  private subscribedQueues: string[] = [];
 
   constructor(
     private readonly processor: JobProcessorService,
@@ -42,30 +47,21 @@ export class QueueConsumerService
     private readonly webhookDispatcher: WebhookDispatcherService,
   ) {}
 
-  private getRoutingQueues(targetWorkerId?: string) {
+  private getRoutingQueues(
+    strategy: ScrapeJobMessage['strategy'],
+    targetWorkerId?: string,
+  ) {
     const config = getWorkerRuntimeConfig();
-    if (!targetWorkerId) {
-      return {
-        queueName: config.queue.queueName,
-        retryQueueName: config.queue.retryQueueName,
-        deadLetterQueueName: config.queue.deadLetterQueueName,
-      };
-    }
 
-    return {
-      queueName: createTargetedQueueName(
-        config.queue.queueName,
-        targetWorkerId,
-      ),
-      retryQueueName: createTargetedRetryQueueName(
-        config.queue.queueName,
-        targetWorkerId,
-      ),
-      deadLetterQueueName: createTargetedDeadLetterQueueName(
-        config.queue.queueName,
-        targetWorkerId,
-      ),
-    };
+    return createStrategyQueueNames(
+      config.queue.queueName,
+      resolveRoutingStrategy(strategy),
+      targetWorkerId,
+    );
+  }
+
+  private getSubscribedStrategies(): RoutingStrategy[] {
+    return getWorkerRuntimeConfig().allowedStrategies;
   }
 
   private async processWithWatchdog(payload: ScrapeJobMessage): Promise<void> {
@@ -109,44 +105,60 @@ export class QueueConsumerService
       );
     }
 
-    const targetedQueues = this.workerHeartbeat.getTargetedQueues();
+    const subscribedStrategies = this.getSubscribedStrategies();
+    const subscribedQueues: string[] = [];
 
-    await channel.assertQueue(config.queue.queueName, { durable: true });
-    await channel.assertQueue(config.queue.retryQueueName, {
-      durable: true,
-      deadLetterExchange: '',
-      deadLetterRoutingKey: config.queue.queueName,
-    });
     await channel.assertQueue(config.queue.deadLetterQueueName, {
       durable: true,
     });
-    await channel.assertQueue(targetedQueues.queueName, { durable: true });
-    await channel.assertQueue(targetedQueues.retryQueueName, {
-      durable: true,
-      deadLetterExchange: '',
-      deadLetterRoutingKey: targetedQueues.queueName,
-    });
-    await channel.assertQueue(targetedQueues.deadLetterQueueName, {
-      durable: true,
-    });
+    for (const routingStrategy of subscribedStrategies) {
+      const sharedQueues = createStrategyQueueNames(
+        config.queue.queueName,
+        routingStrategy,
+      );
+      const targetedQueues = createStrategyQueueNames(
+        config.queue.queueName,
+        routingStrategy,
+        this.workerHeartbeat.getWorkerId(),
+      );
+
+      await channel.assertQueue(sharedQueues.queueName, { durable: true });
+      await channel.assertQueue(sharedQueues.retryQueueName, {
+        durable: true,
+        deadLetterExchange: '',
+        deadLetterRoutingKey: sharedQueues.queueName,
+      });
+      await channel.assertQueue(sharedQueues.deadLetterQueueName, {
+        durable: true,
+      });
+      await channel.assertQueue(targetedQueues.queueName, { durable: true });
+      await channel.assertQueue(targetedQueues.retryQueueName, {
+        durable: true,
+        deadLetterExchange: '',
+        deadLetterRoutingKey: targetedQueues.queueName,
+      });
+      await channel.assertQueue(targetedQueues.deadLetterQueueName, {
+        durable: true,
+      });
+
+      subscribedQueues.push(sharedQueues.queueName, targetedQueues.queueName);
+    }
     await channel.prefetch(config.workerConcurrency);
 
-    await channel.consume(
-      config.queue.queueName,
-      async (message: ConsumeMessage | null) => this.handleMessage(message),
-      { noAck: false },
-    );
-    await channel.consume(
-      targetedQueues.queueName,
-      async (message: ConsumeMessage | null) => this.handleMessage(message),
-      { noAck: false },
-    );
+    for (const queueName of subscribedQueues) {
+      await channel.consume(
+        queueName,
+        async (message: ConsumeMessage | null) => this.handleMessage(message),
+        { noAck: false },
+      );
+    }
 
     this.connection = connection;
     this.channel = channel;
     this.consuming = true;
+    this.subscribedQueues = subscribedQueues;
 
-    logQueueConsumerReady(config.queue.queueName);
+    logQueueConsumerReady(subscribedQueues.join(', '));
   }
 
   private async handleMessage(message: ConsumeMessage | null) {
@@ -198,7 +210,11 @@ export class QueueConsumerService
       Number(message.properties.headers?.['x-delivery-attempt'] ?? 1) ||
       payload.deliveryAttempt ||
       1;
-    const routingQueues = this.getRoutingQueues(payload.targetWorkerId);
+    const routingStrategy = resolveRoutingStrategy(payload.strategy);
+    const routingQueues = this.getRoutingQueues(
+      payload.strategy,
+      payload.targetWorkerId,
+    );
 
     this.logger.log(
       JSON.stringify({
@@ -209,6 +225,7 @@ export class QueueConsumerService
         queueName: message.fields?.routingKey || routingQueues.queueName,
         attempt: currentAttempt,
         strategy: payload.strategy,
+        routingStrategy,
       }),
     );
 
@@ -222,6 +239,7 @@ export class QueueConsumerService
           workerId: this.workerHeartbeat.getWorkerId(),
           targetWorkerId: payload.targetWorkerId ?? null,
           attempt: currentAttempt,
+          routingStrategy,
         }),
       );
     } catch (error) {
@@ -268,6 +286,7 @@ export class QueueConsumerService
             nextAttempt: currentAttempt + 1,
             retryQueueName: routingQueues.retryQueueName,
             error: errorMessage,
+            routingStrategy,
           }),
         );
         return;
@@ -330,6 +349,7 @@ export class QueueConsumerService
           attempt: currentAttempt,
           deadLetterQueueName: routingQueues.deadLetterQueueName,
           error: errorMessage,
+          routingStrategy,
         }),
       );
     }
@@ -341,6 +361,7 @@ export class QueueConsumerService
     this.channel = null;
     this.connection = null;
     this.consuming = false;
+    this.subscribedQueues = [];
   }
 
   getStatus() {
@@ -349,9 +370,15 @@ export class QueueConsumerService
     return {
       connected: Boolean(this.connection && this.channel && this.consuming),
       queueName: config.queue.queueName,
-      retryQueueName: this.workerHeartbeat.getTargetedQueues().retryQueueName,
-      deadLetterQueueName:
-        this.workerHeartbeat.getTargetedQueues().deadLetterQueueName,
+      retryQueueName: createStrategyQueueNames(
+        config.queue.queueName,
+        'cloudscraper',
+      ).retryQueueName,
+      deadLetterQueueName: createStrategyDeadLetterQueueName(
+        config.queue.queueName,
+        'cloudscraper',
+      ),
+      subscribedQueues: this.subscribedQueues,
     };
   }
 }

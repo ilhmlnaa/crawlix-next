@@ -6,7 +6,12 @@ import type { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { QueuePublisherService } from './../src/infrastructure/queue-publisher.service';
 import { RedisService } from './../src/infrastructure/redis.service';
-import { createWorkerHeartbeatKey, createWorkersIndexKey } from '@repo/shared';
+import {
+  createStrategyQueueNames,
+  createWorkerHeartbeatKey,
+  createWorkersIndexKey,
+  resolveRoutingStrategy,
+} from '@repo/shared';
 
 class FakeRedisClient {
   private readonly values = new Map<string, string>();
@@ -105,10 +110,26 @@ class FakeRedisService {
 }
 
 class FakeQueuePublisherService {
-  public readonly publishedJobs: unknown[] = [];
+  public readonly publishedJobs: Array<{
+    job: Record<string, unknown>;
+    queueName: string;
+  }> = [];
 
   async publish(job: unknown) {
-    this.publishedJobs.push(job);
+    const typedJob = job as {
+      strategy: 'auto' | 'cloudscraper' | 'playwright';
+      targetWorkerId?: string;
+    };
+    const queueName = createStrategyQueueNames(
+      'crawlix.scrape.jobs',
+      resolveRoutingStrategy(typedJob.strategy),
+      typedJob.targetWorkerId,
+    ).queueName;
+
+    this.publishedJobs.push({
+      job: typedJob as Record<string, unknown>,
+      queueName,
+    });
   }
 
   async getQueueStats() {
@@ -265,6 +286,33 @@ describe('API auth and jobs flow (e2e)', () => {
       .expect(201);
 
     expect(enqueueResponse.body.status).toBe('queued');
+    expect(queuePublisher.publishedJobs.at(-1)?.queueName).toBe(
+      'crawlix.scrape.jobs.cloudscraper',
+    );
+
+    await request(app)
+      .post('/api/jobs')
+      .set('x-api-key', apiKey)
+      .send({
+        url: 'https://example.com/direct-playwright',
+        strategy: 'playwright',
+      })
+      .expect(201);
+    expect(queuePublisher.publishedJobs.at(-1)?.queueName).toBe(
+      'crawlix.scrape.jobs.playwright',
+    );
+
+    await request(app)
+      .post('/api/jobs')
+      .set('x-api-key', apiKey)
+      .send({
+        url: 'https://example.com/direct-cloudscraper',
+        strategy: 'cloudscraper',
+      })
+      .expect(201);
+    expect(queuePublisher.publishedJobs.at(-1)?.queueName).toBe(
+      'crawlix.scrape.jobs.cloudscraper',
+    );
 
     const statusResponse = await request(app)
       .get(`/api/jobs/${enqueueResponse.body.jobId}`)
@@ -281,6 +329,9 @@ describe('API auth and jobs flow (e2e)', () => {
         targetWorkerId: 'worker-host123-4567',
       })
       .expect(201);
+    expect(queuePublisher.publishedJobs.at(-1)?.queueName).toBe(
+      'crawlix.scrape.jobs.cloudscraper.worker.worker-host123-4567',
+    );
 
     await request(app)
       .post('/api/jobs')
@@ -303,6 +354,9 @@ describe('API auth and jobs flow (e2e)', () => {
       .expect(201);
 
     expect(targetedByService.body.targetWorkerId).toBe('worker-host124-4568');
+    expect(queuePublisher.publishedJobs.at(-1)?.queueName).toBe(
+      'crawlix.scrape.jobs.playwright.worker.worker-host124-4568',
+    );
 
     const targetedByHostname = await request(app)
       .post('/api/jobs')
@@ -315,6 +369,9 @@ describe('API auth and jobs flow (e2e)', () => {
       .expect(201);
 
     expect(targetedByHostname.body.targetWorkerId).toBe('worker-host124-4568');
+    expect(queuePublisher.publishedJobs.at(-1)?.queueName).toBe(
+      'crawlix.scrape.jobs.playwright.worker.worker-host124-4568',
+    );
 
     expect(targetedEnqueue.body.targetWorkerId).toBe('worker-host123-4567');
 

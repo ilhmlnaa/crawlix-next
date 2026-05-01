@@ -8,9 +8,8 @@ import {
 import { getWorkerRuntimeConfig } from '@repo/config';
 import type { WorkerHeartbeat } from '@repo/queue-contracts';
 import {
-  createTargetedDeadLetterQueueName,
-  createTargetedQueueName,
-  createTargetedRetryQueueName,
+  createStrategyQueueNames,
+  resolveRoutingStrategy,
   createWorkerHeartbeatKey,
   createWorkersIndexKey,
 } from '@repo/shared';
@@ -58,20 +57,15 @@ export class WorkerHeartbeatService
   }
 
   getTargetedQueues() {
-    return {
-      queueName: createTargetedQueueName(
-        this.config.queue.queueName,
-        this.workerId,
-      ),
-      retryQueueName: createTargetedRetryQueueName(
-        this.config.queue.queueName,
-        this.workerId,
-      ),
-      deadLetterQueueName: createTargetedDeadLetterQueueName(
-        this.config.queue.queueName,
-        this.workerId,
-      ),
-    };
+    const primaryStrategy = resolveRoutingStrategy(
+      this.config.scraper.defaultStrategy,
+    );
+
+    return createStrategyQueueNames(
+      this.config.queue.queueName,
+      primaryStrategy,
+      this.workerId,
+    );
   }
 
   private createPayload(): WorkerHeartbeat {

@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 
+export type RoutingStrategy = "cloudscraper" | "playwright";
+export type SupportedScrapeStrategy = RoutingStrategy | "auto";
+
 export interface ServiceMetadata {
   name: string;
   displayName: string;
@@ -12,6 +15,12 @@ export interface JobKeys {
 
 export interface IdempotencyKeys {
   request: string;
+}
+
+export interface StrategyQueueNames {
+  queueName: string;
+  retryQueueName: string;
+  deadLetterQueueName: string;
 }
 
 function stableStringifyValue(value: unknown): string {
@@ -129,6 +138,92 @@ export function createTargetedDeadLetterQueueName(
   workerId: string,
 ): string {
   return `${createTargetedQueueName(queueName, workerId)}.dlq`;
+}
+
+export function resolveRoutingStrategy(
+  strategy: SupportedScrapeStrategy,
+): RoutingStrategy {
+  return strategy === "playwright" ? "playwright" : "cloudscraper";
+}
+
+export function createStrategyQueueName(
+  queueName: string,
+  routingStrategy: RoutingStrategy,
+): string {
+  return `${queueName}.${routingStrategy}`;
+}
+
+export function createStrategyRetryQueueName(
+  queueName: string,
+  routingStrategy: RoutingStrategy,
+): string {
+  return `${createStrategyQueueName(queueName, routingStrategy)}.retry`;
+}
+
+export function createStrategyDeadLetterQueueName(
+  queueName: string,
+  routingStrategy: RoutingStrategy,
+): string {
+  return `${createStrategyQueueName(queueName, routingStrategy)}.dlq`;
+}
+
+export function createTargetedStrategyQueueName(
+  queueName: string,
+  routingStrategy: RoutingStrategy,
+  workerId: string,
+): string {
+  return `${createStrategyQueueName(queueName, routingStrategy)}.worker.${sanitizeQueueSegment(workerId)}`;
+}
+
+export function createTargetedStrategyRetryQueueName(
+  queueName: string,
+  routingStrategy: RoutingStrategy,
+  workerId: string,
+): string {
+  return `${createTargetedStrategyQueueName(queueName, routingStrategy, workerId)}.retry`;
+}
+
+export function createTargetedStrategyDeadLetterQueueName(
+  queueName: string,
+  routingStrategy: RoutingStrategy,
+  workerId: string,
+): string {
+  return `${createTargetedStrategyQueueName(queueName, routingStrategy, workerId)}.dlq`;
+}
+
+export function createStrategyQueueNames(
+  queueName: string,
+  routingStrategy: RoutingStrategy,
+  targetWorkerId?: string,
+): StrategyQueueNames {
+  if (!targetWorkerId) {
+    return {
+      queueName: createStrategyQueueName(queueName, routingStrategy),
+      retryQueueName: createStrategyRetryQueueName(queueName, routingStrategy),
+      deadLetterQueueName: createStrategyDeadLetterQueueName(
+        queueName,
+        routingStrategy,
+      ),
+    };
+  }
+
+  return {
+    queueName: createTargetedStrategyQueueName(
+      queueName,
+      routingStrategy,
+      targetWorkerId,
+    ),
+    retryQueueName: createTargetedStrategyRetryQueueName(
+      queueName,
+      routingStrategy,
+      targetWorkerId,
+    ),
+    deadLetterQueueName: createTargetedStrategyDeadLetterQueueName(
+      queueName,
+      routingStrategy,
+      targetWorkerId,
+    ),
+  };
 }
 
 export function createWorkerHostnameRoundRobinKey(

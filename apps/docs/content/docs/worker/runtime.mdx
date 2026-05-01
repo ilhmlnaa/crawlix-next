@@ -60,7 +60,10 @@ Example response:
 - Playwright browser instances are reused through a lightweight pool.
 - Worker heartbeat is stored in Redis so the dashboard can list active workers.
 - `WORKER_ALLOWED_STRATEGIES` controls worker capability and can be set to `cloudscraper`, `playwright`, or both as a comma-separated list.
-- Each worker also exposes a stable `workerId` for the current runtime and consumes a dedicated queue shaped like `crawlix.scrape.jobs.worker.<workerId>`.
+- Shared non-targeted jobs are split into strategy-specific queues such as `crawlix.scrape.jobs.cloudscraper` and `crawlix.scrape.jobs.playwright`.
+- `strategy=auto` is published to the `cloudscraper` queue by default.
+- Each worker also exposes a stable `workerId` for the current runtime and consumes dedicated strategy-specific queues tied to that worker identity.
+- Targeted queues now follow the same strategy-specific shape, for example `crawlix.scrape.jobs.playwright.worker.<workerId>`.
 - Jobs created with `targetWorkerId` are published only to that worker-specific queue. They do not fall back to the shared queue automatically.
 - The admin dashboard can list active workers and use their `workerId` for targeted dispatch decisions.
 - When a targeted job requests an incompatible strategy, the API rejects it before publish and the worker also enforces the same rule during execution.
