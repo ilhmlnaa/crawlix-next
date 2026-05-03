@@ -9,6 +9,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository_owner }}/crawlix-next
   KEEP_TAGS: main,latest
+  KEEP_LAST_N: 2
 
 jobs:
   cleanup:
@@ -22,12 +23,13 @@ jobs:
         service: [api, worker]
 
     steps:
-      - name: Delete container versions without keep tags
+      - name: Delete container versions safely
         uses: actions/github-script@v8
         env:
           OWNER: ${{ github.repository_owner }}
           PACKAGE_NAME: crawlix-next-${{ matrix.service }}
           KEEP_TAGS: ${{ env.KEEP_TAGS }}
+          KEEP_LAST_N: ${{ env.KEEP_LAST_N }}
         with:
           script: |
             const owner = process.env.OWNER;
@@ -35,9 +37,10 @@ jobs:
             const keepTags = new Set(
               (process.env.KEEP_TAGS || "")
                 .split(",")
-                .map((tag) => tag.trim())
+                .map(t => t.trim())
                 .filter(Boolean)
             );
+            const KEEP_LAST_N = parseInt(process.env.KEEP_LAST_N || "5");
 
             const versions = await github.paginate(
               "GET /users/{username}/packages/{package_type}/{package_name}/versions",
@@ -49,22 +52,34 @@ jobs:
               }
             );
 
-            core.info(`Found ${versions.length} versions in ${owner}/${packageName}`);
+            versions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+            const recentVersions = new Set(
+              versions.slice(0, KEEP_LAST_N).map(v => v.id)
+            );
 
             let kept = 0;
             let deleted = 0;
 
             for (const version of versions) {
               const tags = version.metadata?.container?.tags || [];
-              const hasKeepTag = tags.some((tag) => keepTags.has(tag));
 
-              if (hasKeepTag) {
-                kept += 1;
-                core.info(`KEEP id=${version.id} tags=[${tags.join(", ")}]`);
+              if (!tags || tags.length === 0) {
+                kept++;
                 continue;
               }
 
-              core.info(`DELETE id=${version.id} tags=[${tags.join(", ")}]`);
+              if (recentVersions.has(version.id)) {
+                kept++;
+                continue;
+              }
+
+              const hasKeepTag = tags.some(tag => keepTags.has(tag));
+
+              if (hasKeepTag) {
+                kept++;
+                continue;
+              }
 
               await github.request(
                 "DELETE /users/{username}/packages/{package_type}/{package_name}/versions/{package_version_id}",
@@ -76,7 +91,7 @@ jobs:
                 }
               );
 
-              deleted += 1;
+              deleted++;
             }
 
-            core.notice(`[${packageName}] Cleanup completed: kept=${kept}, deleted=${deleted}`);
+            core.notice(`[${packageName}] kept=${kept}, deleted=${deleted}`);
