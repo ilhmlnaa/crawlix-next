@@ -253,7 +253,7 @@ export function OverviewPage() {
               <QuickStat icon={Cpu} label="System Load" value={systemLoad} />
               <QuickStat
                 icon={Globe}
-                label="Active Workers"
+                label="Queue Consumers"
                 value={`${consumerCount} Active`}
               />
               <QuickStat
