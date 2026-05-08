@@ -4,11 +4,12 @@ import { RedisService } from '../infrastructure/redis.service';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
 import { ApiKeyService } from './api-key.service';
+import { ProxyPolicyService } from './proxy-policy.service';
 
 @Module({
   imports: [forwardRef(() => AuthModule)],
   controllers: [AdminController],
-  providers: [RedisService, ApiKeyService, AdminService],
-  exports: [ApiKeyService, AdminService],
+  providers: [RedisService, ApiKeyService, ProxyPolicyService, AdminService],
+  exports: [ApiKeyService, ProxyPolicyService, AdminService],
 })
 export class AdminModule {}

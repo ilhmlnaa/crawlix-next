@@ -12,6 +12,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dispatcher": "Dispatcher",
   "/jobs": "Queue Items",
   "/workers": "Worker Fleet",
+  "/proxy": "Proxy Control",
   "/keys": "API Tokens",
 };
 

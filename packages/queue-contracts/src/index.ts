@@ -26,6 +26,16 @@ export type ScrapeWaitUntil =
   | "networkidle"
   | "commit";
 
+export type ProxyScopeType = "global" | "workerService";
+export type ProxyPolicyMode = "direct" | "pool";
+export type ProxyPolicyStrategy = "round_robin";
+export type ProxyResolutionSource =
+  | "env"
+  | "workerService"
+  | "global"
+  | "job"
+  | "direct";
+
 export interface ScrapeJobOptions {
   timeoutMs?: number;
   method?: string;
@@ -54,6 +64,31 @@ export interface CreateScrapeJobInput {
   webhookUrl?: string;
   webhookSecret?: string;
   idempotencyKey?: string;
+}
+
+export interface ProxyPolicy {
+  id: string;
+  enabled: boolean;
+  mode: ProxyPolicyMode;
+  proxies: string[];
+  strategy: ProxyPolicyStrategy;
+  scopeType: ProxyScopeType;
+  scopeKey?: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export interface ProxySettingsSnapshot {
+  envOverrideActive: boolean;
+  envPolicy: {
+    enabled: boolean;
+    mode: ProxyPolicyMode;
+    strategy: ProxyPolicyStrategy;
+    proxies: string[];
+    poolSize: number;
+  };
+  policies: ProxyPolicy[];
+  availableWorkerServices: string[];
 }
 
 export interface ScrapeJobMessage {
@@ -94,6 +129,11 @@ export interface ScrapeJobRecord {
   error?: string;
   proxyEnabled?: boolean;
   proxyUrl?: string;
+  proxySource?: ProxyResolutionSource;
+  proxyScopeType?: ProxyScopeType;
+  proxyScopeKey?: string;
+  proxyPoolSize?: number;
+  proxyIndex?: number;
 }
 
 export interface ScrapeJobResult {
@@ -123,6 +163,11 @@ export interface ScrapeJobResult {
   error?: string;
   proxyEnabled?: boolean;
   proxyUrl?: string;
+  proxySource?: ProxyResolutionSource;
+  proxyScopeType?: ProxyScopeType;
+  proxyScopeKey?: string;
+  proxyPoolSize?: number;
+  proxyIndex?: number;
 }
 
 export interface EnqueueJobResponse {

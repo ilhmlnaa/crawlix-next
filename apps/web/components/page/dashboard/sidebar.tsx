@@ -6,6 +6,7 @@ import {
   Crosshair,
   KeyRound,
   LayoutDashboard,
+  Network,
   Rabbit,
   ServerCog,
 } from "lucide-react";
@@ -17,6 +18,7 @@ const navItems = [
   { href: "/dispatcher", icon: Crosshair, label: "Dispatcher" },
   { href: "/jobs", icon: Rabbit, label: "Queue Items" },
   { href: "/workers", icon: ServerCog, label: "Workers" },
+  { href: "/proxy", icon: Network, label: "Proxy" },
   { href: "/keys", icon: KeyRound, label: "API Keys" },
 ];
 

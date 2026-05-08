@@ -13,9 +13,18 @@ import type {
 } from "@repo/queue-contracts";
 import { summarizeContent } from "@repo/shared";
 
+type ProxyResolutionSource =
+  | "env"
+  | "workerService"
+  | "global"
+  | "job"
+  | "direct";
+type ProxyScopeType = "global" | "workerService";
+
 export interface ScrapeExecutionContext {
   config?: ScraperRuntimeConfig;
   allowedStrategies?: WorkerAllowedStrategy[];
+  proxyRuntime?: ResolvedProxyRuntime;
   onStageChange?: (
     stage: ScrapeJobStage,
     progress: number,
@@ -80,13 +89,14 @@ interface ScraperStrategyResult {
 interface ScraperStrategy {
   execute(
     job: ScrapeJobMessage,
-    context: Required<ScrapeExecutionContext>,
+    context: ResolvedScrapeExecutionContext,
   ): Promise<ScraperStrategyResult>;
 }
 
 interface ResolvedScrapeExecutionContext {
   config: ScraperRuntimeConfig;
   allowedStrategies: WorkerAllowedStrategy[];
+  proxyRuntime?: ResolvedProxyRuntime;
   onStageChange: NonNullable<ScrapeExecutionContext["onStageChange"]>;
   onEvent: NonNullable<ScrapeExecutionContext["onEvent"]>;
 }
@@ -94,6 +104,16 @@ interface ResolvedScrapeExecutionContext {
 export interface ProxyResolution {
   enabled: boolean;
   proxyUrl?: string;
+  proxyDisplayUrl?: string;
+  source?: ProxyResolutionSource;
+  scopeType?: ProxyScopeType;
+  scopeKey?: string;
+  proxyPoolSize?: number;
+  proxyIndex?: number;
+}
+
+export interface ResolvedProxyRuntime extends ProxyResolution {
+  source: ProxyResolutionSource;
 }
 
 export interface BrowserRuntimeStats {
@@ -128,6 +148,7 @@ function readConfig(
     config: context?.config ?? workerConfig.scraper,
     allowedStrategies:
       context?.allowedStrategies ?? workerConfig.allowedStrategies,
+    proxyRuntime: context?.proxyRuntime,
     onStageChange: context?.onStageChange ?? (() => undefined),
     onEvent: context?.onEvent ?? (() => undefined),
   };
@@ -227,44 +248,70 @@ function readTimeout(
 function resolveProxyUrl(
   options: ScrapeJobOptions,
   config: ScraperRuntimeConfig,
+  proxyRuntime?: ResolvedProxyRuntime,
 ): string | undefined {
-  return resolveProxySettings(options, config).proxyUrl;
+  return resolveProxySettings(options, config, proxyRuntime).proxyUrl;
 }
 
 export function resolveProxySettings(
   options: ScrapeJobOptions,
   config: ScraperRuntimeConfig,
+  proxyRuntime?: ResolvedProxyRuntime,
 ): ProxyResolution {
+  if (proxyRuntime) {
+    return proxyRuntime;
+  }
+
   const forcedProxyUrl = config.proxyUrl?.trim();
+  const forcedProxyPoolSize = forcedProxyUrl ? 1 : 0;
   if (config.forceProxy === true) {
     return forcedProxyUrl
-      ? { enabled: true, proxyUrl: forcedProxyUrl }
-      : { enabled: false };
+      ? {
+          enabled: true,
+          proxyUrl: forcedProxyUrl,
+          proxyDisplayUrl: forcedProxyUrl,
+          source: "env",
+          scopeType: "global",
+          proxyPoolSize: forcedProxyPoolSize || 1,
+          proxyIndex: 0,
+        }
+      : { enabled: false, source: "direct" };
   }
 
   const requestProxyUrl = options.proxyUrl?.trim();
   if (requestProxyUrl) {
-    return { enabled: true, proxyUrl: requestProxyUrl };
+    return {
+      enabled: true,
+      proxyUrl: requestProxyUrl,
+      proxyDisplayUrl: requestProxyUrl,
+      source: "job",
+      scopeType: "global",
+      proxyPoolSize: 1,
+      proxyIndex: 0,
+    };
   }
 
   if (options.useProxy !== true) {
-    return { enabled: false };
+    return { enabled: false, source: "direct" };
   }
 
   return forcedProxyUrl
-    ? { enabled: true, proxyUrl: forcedProxyUrl }
-    : { enabled: false };
+    ? {
+        enabled: true,
+        proxyUrl: forcedProxyUrl,
+        proxyDisplayUrl: forcedProxyUrl,
+        source: "env",
+        scopeType: "global",
+        proxyPoolSize: forcedProxyPoolSize || 1,
+        proxyIndex: 0,
+      }
+    : { enabled: false, source: "direct" };
 }
 
 class BrowserPoolManager {
   private static instance: BrowserPoolManager | null = null;
-  private directBrowser: any | null = null;
-  private proxyBrowser: any | null = null;
-  private proxyBrowserUrl: string | null = null;
-  private idleTimers = new Map<
-    "direct" | "proxy",
-    ReturnType<typeof setTimeout>
-  >();
+  private browsers = new Map<string, any>();
+  private idleTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private playwrightAvailable = true;
 
   static getInstance() {
@@ -279,17 +326,8 @@ class BrowserPoolManager {
     proxyUrl: string | undefined,
     config: ScraperRuntimeConfig,
   ): Promise<any> {
-    const key: "direct" | "proxy" = proxyUrl ? "proxy" : "direct";
-
-    if (
-      key === "proxy" &&
-      this.proxyBrowser &&
-      this.proxyBrowserUrl !== proxyUrl
-    ) {
-      await this.closeBrowser("proxy");
-    }
-
-    const existing = key === "proxy" ? this.proxyBrowser : this.directBrowser;
+    const key = proxyUrl ? `proxy:${proxyUrl}` : "direct";
+    const existing = this.browsers.get(key);
 
     if (existing) {
       this.resetIdleTimer(key, config);
@@ -316,12 +354,7 @@ class BrowserPoolManager {
         ],
       });
 
-      if (key === "proxy") {
-        this.proxyBrowser = browser;
-        this.proxyBrowserUrl = proxyUrl ?? null;
-      } else {
-        this.directBrowser = browser;
-      }
+      this.browsers.set(key, browser);
       this.playwrightAvailable = true;
       this.resetIdleTimer(key, config);
 
@@ -332,10 +365,7 @@ class BrowserPoolManager {
     }
   }
 
-  private resetIdleTimer(
-    key: "direct" | "proxy",
-    config: ScraperRuntimeConfig,
-  ) {
+  private resetIdleTimer(key: string, config: ScraperRuntimeConfig) {
     const current = this.idleTimers.get(key);
     if (current) {
       clearTimeout(current);
@@ -347,20 +377,15 @@ class BrowserPoolManager {
     this.idleTimers.set(key, timer);
   }
 
-  async closeBrowser(key: "direct" | "proxy") {
-    const browser = key === "proxy" ? this.proxyBrowser : this.directBrowser;
+  async closeBrowser(key: string) {
+    const browser = this.browsers.get(key);
 
     if (!browser) {
       return;
     }
 
     await browser.close().catch(() => undefined);
-    if (key === "proxy") {
-      this.proxyBrowser = null;
-      this.proxyBrowserUrl = null;
-    } else {
-      this.directBrowser = null;
-    }
+    this.browsers.delete(key);
     const timer = this.idleTimers.get(key);
     if (timer) {
       clearTimeout(timer);
@@ -369,22 +394,28 @@ class BrowserPoolManager {
   }
 
   async destroy() {
-    await Promise.all([
-      this.closeBrowser("direct"),
-      this.closeBrowser("proxy"),
-    ]);
+    await Promise.all(
+      Array.from(this.browsers.keys()).map((key) => this.closeBrowser(key)),
+    );
   }
 
   getStats(): BrowserRuntimeStats {
     return {
       available: this.playwrightAvailable,
       direct: {
-        active: Boolean(this.directBrowser),
-        contexts: this.directBrowser?.contexts().length ?? 0,
+        active: Boolean(this.browsers.get("direct")),
+        contexts: this.browsers.get("direct")?.contexts().length ?? 0,
       },
       proxy: {
-        active: Boolean(this.proxyBrowser),
-        contexts: this.proxyBrowser?.contexts().length ?? 0,
+        active: Array.from(this.browsers.keys()).some((key) =>
+          key.startsWith("proxy:"),
+        ),
+        contexts: Array.from(this.browsers.entries())
+          .filter(([key]) => key.startsWith("proxy:"))
+          .reduce(
+            (total, [, browser]) => total + (browser?.contexts().length ?? 0),
+            0,
+          ),
       },
     };
   }
@@ -392,7 +423,7 @@ class BrowserPoolManager {
 
 async function executeHttpFetch(
   job: ScrapeJobMessage,
-  context: Required<ScrapeExecutionContext>,
+  context: ResolvedScrapeExecutionContext,
   methodLabel: string,
 ): Promise<ScraperStrategyResult> {
   await context.onStageChange("fetching", 15);
@@ -461,7 +492,7 @@ async function executeHttpFetch(
 class CloudscraperStrategy implements ScraperStrategy {
   async execute(
     job: ScrapeJobMessage,
-    context: Required<ScrapeExecutionContext>,
+    context: ResolvedScrapeExecutionContext,
   ): Promise<ScraperStrategyResult> {
     const dynamicImport = new Function(
       "specifier",
@@ -478,7 +509,11 @@ class CloudscraperStrategy implements ScraperStrategy {
       const cloudscraperModule = await dynamicImport("cloudscraper");
       const cloudscraper = cloudscraperModule.default ?? cloudscraperModule;
       const startedAt = Date.now();
-      const proxyUrl = resolveProxyUrl(job.options, context.config);
+      const proxyUrl = resolveProxyUrl(
+        job.options,
+        context.config,
+        context.proxyRuntime,
+      );
       const response = await cloudscraper({
         uri: new URL(job.url).href,
         method: job.options.method ?? "GET",
@@ -562,7 +597,7 @@ class PlaywrightStrategy implements ScraperStrategy {
 
   async execute(
     job: ScrapeJobMessage,
-    context: Required<ScrapeExecutionContext>,
+    context: ResolvedScrapeExecutionContext,
   ): Promise<ScraperStrategyResult> {
     const dynamicImport = new Function(
       "specifier",
@@ -570,7 +605,11 @@ class PlaywrightStrategy implements ScraperStrategy {
     ) as (specifier: string) => Promise<any>;
     const startedAt = Date.now();
     const timeoutMs = readTimeout(job.options, context.config);
-    const proxyUrl = resolveProxyUrl(job.options, context.config);
+    const proxyUrl = resolveProxyUrl(
+      job.options,
+      context.config,
+      context.proxyRuntime,
+    );
 
     try {
       const playwright = await dynamicImport("playwright");

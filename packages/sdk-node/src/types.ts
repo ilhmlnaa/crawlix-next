@@ -22,6 +22,14 @@ export type ScrapeWaitUntil =
   | "networkidle"
   | "commit";
 
+export type ProxyScopeType = "global" | "workerService";
+export type ProxyResolutionSource =
+  | "env"
+  | "workerService"
+  | "global"
+  | "job"
+  | "direct";
+
 export interface JobOptions {
   timeoutMs?: number;
   method?: string;
@@ -85,6 +93,13 @@ export interface JobRecord {
   webhookUrl?: string;
   idempotencyKey?: string;
   error?: string;
+  proxyEnabled?: boolean;
+  proxyUrl?: string;
+  proxySource?: ProxyResolutionSource;
+  proxyScopeType?: ProxyScopeType;
+  proxyScopeKey?: string;
+  proxyPoolSize?: number;
+  proxyIndex?: number;
 }
 
 export interface JobResult {
@@ -110,6 +125,13 @@ export interface JobResult {
   webhookUrl?: string;
   idempotencyKey?: string;
   error?: string;
+  proxyEnabled?: boolean;
+  proxyUrl?: string;
+  proxySource?: ProxyResolutionSource;
+  proxyScopeType?: ProxyScopeType;
+  proxyScopeKey?: string;
+  proxyPoolSize?: number;
+  proxyIndex?: number;
 }
 
 export interface CrawlixClientOptions {

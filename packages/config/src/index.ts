@@ -72,6 +72,7 @@ export interface ScraperRuntimeConfig {
   maxRetries: number;
   retryDelayMs: number;
   userAgent: string;
+  proxyUrls: string[];
   proxyUrl?: string;
   forceProxy: boolean;
   playwrightHeadless: boolean;
@@ -86,6 +87,21 @@ function readNumber(value: string | undefined, fallback: number): number {
 
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function parseProxyUrls(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .split(/[\r\n,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function parseAllowedStrategies(
@@ -223,6 +239,17 @@ function validateRedisConfig(config: RedisConfig): RedisConfig {
 function validateScraperConfig(
   config: ScraperRuntimeConfig,
 ): ScraperRuntimeConfig {
+  const proxyUrls = Array.from(
+    new Set(
+      config.proxyUrls
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value, index) =>
+          assertUrl(value, `SCRAPER_PROXY_URLS[${index.toString()}]`),
+        ),
+    ),
+  );
+
   return {
     ...config,
     defaultTimeoutMs: assertPositiveInteger(
@@ -252,7 +279,8 @@ function validateScraperConfig(
       config.browserIdleTimeoutMs,
       "PLAYWRIGHT_BROWSER_IDLE_TIMEOUT_MS",
     ),
-    proxyUrl: config.proxyUrl?.trim() ? config.proxyUrl : undefined,
+    proxyUrls,
+    proxyUrl: proxyUrls[0] ?? undefined,
     playwrightExecutablePath: config.playwrightExecutablePath?.trim()
       ? config.playwrightExecutablePath
       : undefined,
@@ -381,7 +409,13 @@ function readRedisConfig(env: NodeJS.ProcessEnv): RedisConfig {
 
 function readScraperConfig(env: NodeJS.ProcessEnv): ScraperRuntimeConfig {
   const defaultStrategy = env.SCRAPER_DEFAULT_STRATEGY;
-  const forceProxy = env.SCRAPER_FORCE_PROXY === "true";
+  const envProxyUrls = parseProxyUrls(env.SCRAPER_PROXY_URLS);
+  const legacyProxyUrls =
+    envProxyUrls.length > 0 ? [] : parseProxyUrls(env.SCRAPER_PROXY_URL);
+  const proxyUrls =
+    envProxyUrls.length > 0 ? envProxyUrls : legacyProxyUrls;
+  const forceProxy =
+    proxyUrls.length > 0 || env.SCRAPER_FORCE_PROXY === "true";
 
   return {
     defaultStrategy:
@@ -397,7 +431,8 @@ function readScraperConfig(env: NodeJS.ProcessEnv): ScraperRuntimeConfig {
     userAgent:
       env.SCRAPER_USER_AGENT ??
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    proxyUrl: env.SCRAPER_PROXY_URL,
+    proxyUrls,
+    proxyUrl: proxyUrls[0],
     forceProxy,
     playwrightHeadless: env.PLAYWRIGHT_HEADLESS !== "false",
     playwrightExecutablePath: env.PLAYWRIGHT_EXECUTABLE_PATH,

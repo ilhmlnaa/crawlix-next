@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ApiKeyService } from './api-key.service';
+import { ProxyPolicyService } from './proxy-policy.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly apiKeyService: ApiKeyService) {}
+  constructor(
+    private readonly apiKeyService: ApiKeyService,
+    private readonly proxyPolicyService: ProxyPolicyService,
+  ) {}
 
   listApiKeys() {
     return this.apiKeyService.list();
@@ -19,5 +23,9 @@ export class AdminService {
 
   deleteApiKey(keyId: string) {
     return this.apiKeyService.delete(keyId);
+  }
+
+  getProxyPolicyService() {
+    return this.proxyPolicyService;
   }
 }

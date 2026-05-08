@@ -1,13 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { getWorkerRuntimeConfig } from '@repo/config';
 import { ScraperService } from '@repo/scraper';
-import { resolveProxySettings } from '@repo/scraper';
 import type {
   ScrapeJobMessage,
   ScrapeStrategy,
   WorkerAllowedStrategy,
 } from '@repo/queue-contracts';
 import { JobStoreService } from './job-store.service';
+import { ProxyPolicyService } from './proxy-policy.service';
 import { ScrapeCacheService } from './scrape-cache.service';
 import { WorkerHeartbeatService } from './worker-heartbeat.service';
 import { WebhookDispatcherService } from './webhook-dispatcher.service';
@@ -19,6 +19,7 @@ export class JobProcessorService implements OnModuleDestroy {
 
   constructor(
     private readonly jobStore: JobStoreService,
+    private readonly proxyPolicyService: ProxyPolicyService,
     private readonly scrapeCache: ScrapeCacheService,
     private readonly workerHeartbeat: WorkerHeartbeatService,
     private readonly webhookDispatcher: WebhookDispatcherService,
@@ -103,13 +104,15 @@ export class JobProcessorService implements OnModuleDestroy {
     await this.workerHeartbeat.markProcessing(job.jobId);
     await this.jobStore.updateStatus(job.jobId, 'processing');
     await this.jobStore.updateProgress(job.jobId, 5, 'fetching');
-    const proxySettings = resolveProxySettings(
-      job.options,
-      config.scraper,
-    );
+    const proxySettings = await this.proxyPolicyService.resolveForJob(job);
     await this.jobStore.patchRecord(job.jobId, {
       proxyEnabled: proxySettings.enabled,
-      proxyUrl: proxySettings.proxyUrl,
+      proxyUrl: proxySettings.proxyDisplayUrl,
+      proxySource: proxySettings.source,
+      proxyScopeType: proxySettings.scopeType,
+      proxyScopeKey: proxySettings.scopeKey,
+      proxyPoolSize: proxySettings.proxyPoolSize,
+      proxyIndex: proxySettings.proxyIndex,
     });
 
     if (!this.isStrategyAllowed(job.strategy, allowedStrategies)) {
@@ -139,6 +142,7 @@ export class JobProcessorService implements OnModuleDestroy {
         (await this.scraper.execute(job, {
           allowedStrategies,
           config: config.scraper,
+          proxyRuntime: proxySettings,
           onStageChange: async (stage, progress) => {
             await this.jobStore.updateProgress(job.jobId, progress, stage);
           },
@@ -252,7 +256,12 @@ export class JobProcessorService implements OnModuleDestroy {
       const result = {
         ...executionResult,
         proxyEnabled: proxySettings.enabled,
-        proxyUrl: proxySettings.proxyUrl,
+        proxyUrl: proxySettings.proxyDisplayUrl,
+        proxySource: proxySettings.source,
+        proxyScopeType: proxySettings.scopeType,
+        proxyScopeKey: proxySettings.scopeKey,
+        proxyPoolSize: proxySettings.proxyPoolSize,
+        proxyIndex: proxySettings.proxyIndex,
         targetWorkerId: job.targetWorkerId,
         targetWorkerHostname: job.targetWorkerHostname,
         executedWorkerId: this.workerHeartbeat.getWorkerId(),

@@ -233,6 +233,60 @@ export function createWorkerHostnameRoundRobinKey(
   return `${prefix}:worker-hostname:${sanitizeRedisSegment(hostname)}:rr`;
 }
 
+export function createProxyPolicyKey(
+  prefix: string,
+  scopeType: "global" | "workerService",
+  scopeKey?: string,
+): string {
+  if (scopeType === "global") {
+    return `${prefix}:proxy-policy:global`;
+  }
+
+  return `${prefix}:proxy-policy:worker-service:${sanitizeRedisSegment(scopeKey ?? "default")}`;
+}
+
+export function createProxyPolicyIndexKey(prefix: string): string {
+  return `${prefix}:proxy-policy:index`;
+}
+
+export function createProxyPoolRoundRobinKey(
+  prefix: string,
+  scopeType: "env" | "global" | "workerService" | "job",
+  scopeKey?: string,
+): string {
+  if (scopeType === "env") {
+    return `${prefix}:proxy-pool:env:rr`;
+  }
+
+  if (scopeType === "global") {
+    return `${prefix}:proxy-pool:global:rr`;
+  }
+
+  if (scopeType === "job") {
+    return `${prefix}:proxy-pool:job:rr`;
+  }
+
+  return `${prefix}:proxy-pool:worker-service:${sanitizeRedisSegment(scopeKey ?? "default")}:rr`;
+}
+
+export function maskProxyUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    if (url.username) {
+      url.username =
+        url.username.length <= 2
+          ? "*".repeat(url.username.length)
+          : `${url.username.slice(0, 2)}***`;
+    }
+    if (url.password) {
+      url.password = "******";
+    }
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
 export function createQueueFingerprint(
   url: string,
   strategy: string,

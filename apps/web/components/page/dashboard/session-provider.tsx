@@ -17,6 +17,8 @@ import type {
   JobsOverviewSnapshot,
   JobsOverviewTimeSeriesSnapshot,
   JobsOverviewTimeSeriesTimeframe,
+  ProxyPolicy,
+  ProxySettingsSnapshot,
   ScrapeJobOptions,
   ScrapeJobRecord,
 } from "@repo/queue-contracts";
@@ -73,6 +75,19 @@ export interface DashboardSessionValue {
   loadOverviewTimeSeries: (
     timeframe?: JobsOverviewTimeSeriesTimeframe,
   ) => Promise<void>;
+  proxySettings: ProxySettingsSnapshot | null;
+  loadingProxySettings: boolean;
+  savingProxySettings: boolean;
+  loadProxySettings: () => Promise<void>;
+  handleSaveGlobalProxyPolicy: (
+    input: Pick<ProxyPolicy, "enabled" | "mode" | "proxies">,
+  ) => Promise<void>;
+  handleDeleteGlobalProxyPolicy: () => Promise<void>;
+  handleSaveWorkerServiceProxyPolicy: (
+    serviceName: string,
+    input: Pick<ProxyPolicy, "enabled" | "mode" | "proxies">,
+  ) => Promise<void>;
+  handleDeleteWorkerServiceProxyPolicy: (serviceName: string) => Promise<void>;
 
   handleLogin: () => Promise<void>;
   handleLogout: () => Promise<void>;
@@ -136,6 +151,10 @@ export function DashboardSessionProvider({
     useState<JobsOverviewTimeSeriesSnapshot | null>(null);
   const [loadingOverviewTimeSeries, setLoadingOverviewTimeSeries] =
     useState(false);
+  const [proxySettings, setProxySettings] =
+    useState<ProxySettingsSnapshot | null>(null);
+  const [loadingProxySettings, setLoadingProxySettings] = useState(false);
+  const [savingProxySettings, setSavingProxySettings] = useState(false);
   const [queueChartTimeframe, setQueueChartTimeframe] =
     useState<JobsOverviewTimeSeriesTimeframe>("hour");
   const timeframeRef = useRef<JobsOverviewTimeSeriesTimeframe>("hour");
@@ -176,6 +195,15 @@ export function DashboardSessionProvider({
     setLoadingApiKeys(false);
   }, [apiBaseUrl]);
 
+  const loadProxySettings = useCallback(async () => {
+    setLoadingProxySettings(true);
+    const snapshot = await fetchJson<ProxySettingsSnapshot>(
+      `${apiBaseUrl}/admin/proxy`,
+    );
+    setProxySettings(snapshot);
+    setLoadingProxySettings(false);
+  }, [apiBaseUrl]);
+
   useEffect(() => {
     let cancelled = false;
     const bootstrap = async () => {
@@ -189,6 +217,7 @@ export function DashboardSessionProvider({
         await Promise.all([
           loadOverview(),
           loadApiKeys(),
+          loadProxySettings(),
           loadOverviewTimeSeries(),
         ]);
       }
@@ -198,7 +227,13 @@ export function DashboardSessionProvider({
     return () => {
       cancelled = true;
     };
-  }, [apiBaseUrl, loadApiKeys, loadOverview, loadOverviewTimeSeries]);
+  }, [
+    apiBaseUrl,
+    loadApiKeys,
+    loadOverview,
+    loadOverviewTimeSeries,
+    loadProxySettings,
+  ]);
 
   useEffect(() => {
     const stored = window.sessionStorage.getItem(NEW_API_KEY_SESSION_KEY);
@@ -219,11 +254,12 @@ export function DashboardSessionProvider({
       // Use ref to access latest timeframe without re-triggering effect
       Promise.all([
         loadOverview(),
+        loadProxySettings(),
         loadOverviewTimeSeries(timeframeRef.current),
       ]).then(() => setRefreshing(false));
     }, 10_000);
     return () => clearInterval(interval);
-  }, [admin, loadOverview, loadOverviewTimeSeries]);
+  }, [admin, loadOverview, loadOverviewTimeSeries, loadProxySettings]);
 
   const handleLogin = async () => {
     setLoggingIn(true);
@@ -243,7 +279,7 @@ export function DashboardSessionProvider({
     }
     setAdmin(res.admin);
     setPassword("");
-    await Promise.all([loadOverview(), loadApiKeys()]);
+    await Promise.all([loadOverview(), loadApiKeys(), loadProxySettings()]);
     setLoggingIn(false);
     toast.success("Signed in successfully");
   };
@@ -254,6 +290,7 @@ export function DashboardSessionProvider({
     setAdmin(null);
     setOverview(null);
     setApiKeys([]);
+    setProxySettings(null);
     setRevealableKeyId(null);
     setNewApiKeyValue(null);
     setCopiedNewApiKey(false);
@@ -265,6 +302,7 @@ export function DashboardSessionProvider({
     await Promise.all([
       loadOverview(),
       loadApiKeys(),
+      loadProxySettings(),
       loadOverviewTimeSeries(queueChartTimeframe),
     ]).then(() => setRefreshing(false));
   };
@@ -393,6 +431,76 @@ export function DashboardSessionProvider({
     setCopiedNewApiKey(false);
   };
 
+  const handleSaveGlobalProxyPolicy = async (
+    input: Pick<ProxyPolicy, "enabled" | "mode" | "proxies">,
+  ) => {
+    setSavingProxySettings(true);
+    const saved = await fetchJson<ProxyPolicy>(`${apiBaseUrl}/admin/proxy/global`, {
+      method: "PUT",
+      body: JSON.stringify({
+        ...input,
+        scopeType: "global",
+        strategy: "round_robin",
+      }),
+    });
+    await loadProxySettings();
+    setSavingProxySettings(false);
+    if (saved) {
+      toast.success("Global proxy policy saved");
+    } else {
+      toast.error("Failed to save global proxy policy");
+    }
+  };
+
+  const handleDeleteGlobalProxyPolicy = async () => {
+    setSavingProxySettings(true);
+    await fetchJson(`${apiBaseUrl}/admin/proxy/global`, {
+      method: "DELETE",
+    });
+    await loadProxySettings();
+    setSavingProxySettings(false);
+    toast.success("Global proxy policy deleted");
+  };
+
+  const handleSaveWorkerServiceProxyPolicy = async (
+    serviceName: string,
+    input: Pick<ProxyPolicy, "enabled" | "mode" | "proxies">,
+  ) => {
+    setSavingProxySettings(true);
+    const saved = await fetchJson<ProxyPolicy>(
+      `${apiBaseUrl}/admin/proxy/worker-services/${encodeURIComponent(serviceName)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          ...input,
+          scopeType: "workerService",
+          scopeKey: serviceName,
+          strategy: "round_robin",
+        }),
+      },
+    );
+    await loadProxySettings();
+    setSavingProxySettings(false);
+    if (saved) {
+      toast.success("Worker service proxy policy saved");
+    } else {
+      toast.error("Failed to save worker service proxy policy");
+    }
+  };
+
+  const handleDeleteWorkerServiceProxyPolicy = async (serviceName: string) => {
+    setSavingProxySettings(true);
+    await fetchJson(
+      `${apiBaseUrl}/admin/proxy/worker-services/${encodeURIComponent(serviceName)}`,
+      {
+        method: "DELETE",
+      },
+    );
+    await loadProxySettings();
+    setSavingProxySettings(false);
+    toast.success("Worker service proxy policy deleted");
+  };
+
   return (
     <DashboardSessionContext.Provider
       value={{
@@ -424,6 +532,14 @@ export function DashboardSessionProvider({
         queueChartTimeframe,
         setQueueChartTimeframe,
         loadOverviewTimeSeries,
+        proxySettings,
+        loadingProxySettings,
+        savingProxySettings,
+        loadProxySettings,
+        handleSaveGlobalProxyPolicy,
+        handleDeleteGlobalProxyPolicy,
+        handleSaveWorkerServiceProxyPolicy,
+        handleDeleteWorkerServiceProxyPolicy,
         handleLogin,
         handleLogout,
         handleRefresh,
