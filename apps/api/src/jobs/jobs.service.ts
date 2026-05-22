@@ -17,6 +17,7 @@ import {
 } from '@repo/queue-contracts';
 import { createJobId, createQueueFingerprint, nowIso } from '@repo/shared';
 import { JobStoreService } from './job-store.service';
+import { ScrapeCacheService } from './scrape-cache.service';
 import { QueuePublisherService } from '../infrastructure/queue-publisher.service';
 import { WorkerRegistryService } from './worker-registry.service';
 import { WebhookEventService } from './webhook-event.service';
@@ -43,6 +44,7 @@ export class JobsService {
 
   constructor(
     private readonly jobStore: JobStoreService,
+    private readonly scrapeCache: ScrapeCacheService,
     private readonly publisher: QueuePublisherService,
     private readonly workerRegistry: WorkerRegistryService,
     private readonly webhookEvents: WebhookEventService,
@@ -198,6 +200,71 @@ export class JobsService {
           retriedFromJobId: existing.retriedFromJobId,
           webhookUrl: existing.webhookUrl,
           idempotencyKey: existing.idempotencyKey,
+        };
+      }
+    }
+
+    if (options.useCache !== false) {
+      const cached = await this.scrapeCache.lookup({
+        jobId,
+        url: input.url,
+        strategy,
+        fingerprint,
+        requestedAt,
+        webhookUrl,
+        idempotencyKey,
+        targetWorkerId,
+        targetWorkerServiceName,
+        targetWorkerHostname,
+        retriedFromJobId,
+      });
+
+      if (cached) {
+        const completedRecord: ScrapeJobRecord = {
+          jobId,
+          url: input.url,
+          strategy,
+          options,
+          status: 'completed',
+          progress: 100,
+          stage: 'completed',
+          requestedAt,
+          updatedAt: requestedAt,
+          fingerprint,
+          targetWorkerId,
+          targetWorkerServiceName,
+          targetWorkerHostname,
+          retriedFromJobId,
+          webhookUrl,
+          webhookSecret,
+          idempotencyKey,
+        };
+
+        await Promise.all([
+          this.jobStore.saveRecord(completedRecord),
+          this.jobStore.saveResult(cached),
+          idempotencyKey
+            ? this.jobStore.saveIdempotentJob(idempotencyKey, jobId)
+            : Promise.resolve(),
+          webhookUrl
+            ? this.webhookEvents.publishFromResult(cached, webhookSecret)
+            : Promise.resolve(),
+        ]);
+        this.invalidateOverviewCache();
+
+        return {
+          jobId,
+          status: 'completed',
+          progress: 100,
+          stage: 'completed',
+          queuedAt: requestedAt,
+          resultTtlSeconds: config.redis.resultTtlSeconds,
+          targetWorkerId,
+          targetWorkerServiceName,
+          targetWorkerHostname,
+          retriedFromJobId,
+          webhookUrl,
+          idempotencyKey,
         };
       }
     }

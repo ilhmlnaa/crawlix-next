@@ -6,6 +6,7 @@ import { JobsController } from './jobs.controller';
 import { WorkersController } from './workers.controller';
 import { JobsService } from './jobs.service';
 import { JobStoreService } from './job-store.service';
+import { ScrapeCacheService } from './scrape-cache.service';
 import { QueuePublisherService } from '../infrastructure/queue-publisher.service';
 import { RedisService } from '../infrastructure/redis.service';
 import { WorkerRegistryService } from './worker-registry.service';
@@ -17,6 +18,7 @@ import { WebhookEventService } from './webhook-event.service';
   providers: [
     JobsService,
     JobStoreService,
+    ScrapeCacheService,
     QueuePublisherService,
     RedisService,
     WorkerRegistryService,
@@ -25,6 +27,7 @@ import { WebhookEventService } from './webhook-event.service';
   exports: [
     JobsService,
     JobStoreService,
+    ScrapeCacheService,
     QueuePublisherService,
     WorkerRegistryService,
     RedisService,
