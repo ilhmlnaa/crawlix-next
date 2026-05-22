@@ -118,7 +118,7 @@ app.post("/crawlix/webhook", (req, res) => {
     signature: req.headers["x-crawlix-signature"],
   });
 
-  const event = parseWebhookEvent(JSON.parse(req.body.toString()));
+  const event = parseWebhookEvent(req.body);
 
   if (event.event === "job.completed") {
     // Fetch full result if needed

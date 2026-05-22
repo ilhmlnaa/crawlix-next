@@ -52,7 +52,7 @@ app.post("/crawlix/webhook", (req, res) => {
     signature,
   });
 
-  const event = parseWebhookEvent(JSON.parse(req.body.toString()));
+  const event = parseWebhookEvent(req.body);
   console.log(event.event, event.data.jobId, event.data.status);
 
   res.sendStatus(200);
@@ -100,6 +100,50 @@ Always verify the signature before processing the payload.
 ## Retry Behavior
 
 Webhook delivery is retried automatically via a dedicated retry queue. Failed deliveries do not block scrape workers.
+
+Default delivery settings:
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `WEBHOOK_REQUEST_TIMEOUT_MS` | `10000` | Timeout for one webhook POST attempt |
+| `RABBITMQ_WEBHOOK_RETRY_DELAY_MS` | `15000` | Delay before the next retry |
+| `RABBITMQ_WEBHOOK_MAX_DELIVERY_ATTEMPTS` | `5` | Maximum delivery attempts before dead-letter |
+
+If your receiver responds with a non-2xx status or the request times out, Crawlix schedules a retry. Duplicate events are possible, so receivers should be idempotent using `eventId`.
+
+## Local Tunnel Caveat
+
+When testing webhooks locally through Cloudflare Tunnel, ngrok, or similar tools, the first delivery attempt can occasionally time out due to cold tunnel connections or temporary tunnel latency. When this happens, Crawlix retries through the webhook retry queue and the observed latency can include `RABBITMQ_WEBHOOK_RETRY_DELAY_MS`.
+
+For accurate webhook latency benchmarks, run the receiver on a VPS or another stable public endpoint.
+
+## Production Recommendations
+
+- Return HTTP 2xx as quickly as possible.
+- Move heavy work to a background job after acknowledging the webhook.
+- Verify the signature before processing the payload.
+- Store processed `eventId` values to make the receiver idempotent.
+- Use a stable public endpoint instead of local tunnels for production workloads.
+
+## Troubleshooting
+
+### Webhook never arrives
+
+- Verify `webhookUrl` includes the full path, for example `https://domain.com/crawlix/webhook`.
+- Verify the endpoint is publicly reachable from the worker network.
+- Verify DNS propagation and tunnel status if using a tunnel.
+- Verify the receiver returns a 2xx response.
+
+### Signature verification fails
+
+- Make sure `webhookSecret` in `createJob()` matches the receiver secret.
+- Use the raw request body, not parsed JSON.
+- In Express, mount `express.raw({ type: "application/json" })` before any JSON parser for the webhook route.
+- Pass the raw body directly to `parseWebhookEvent(req.body)`. Do not call `JSON.parse()` before `parseWebhookEvent()`.
+
+### Webhook is slower than polling in local tests
+
+Check whether deliveries arrive in groups spaced around `RABBITMQ_WEBHOOK_RETRY_DELAY_MS`. That usually means the first delivery attempt timed out through the local tunnel and the retry succeeded later.
 
 ## Full Example
 
