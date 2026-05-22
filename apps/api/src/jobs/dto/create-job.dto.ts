@@ -5,11 +5,9 @@ import type {
   ScrapeWaitUntil,
 } from '@repo/queue-contracts';
 
-const ScrapeStrategySchema: z.ZodType<ScrapeStrategy> = z.enum([
-  'cloudscraper',
-  'playwright',
-  'auto',
-]);
+const ScrapeStrategySchema: z.ZodType<ScrapeStrategy> = z
+  .enum(['http', 'playwright', 'auto', 'cloudscraper'])
+  .transform((value) => (value === 'cloudscraper' ? 'http' : value));
 
 const ScrapeWaitUntilSchema: z.ZodType<ScrapeWaitUntil> = z.enum([
   'load',

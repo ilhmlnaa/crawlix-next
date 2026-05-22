@@ -30,7 +30,7 @@ export class QueuePublisherService implements OnModuleDestroy {
   private channel: Channel | null = null;
 
   private get sharedRoutingStrategies(): RoutingStrategy[] {
-    return ['cloudscraper', 'playwright'];
+    return ['http', 'playwright'];
   }
 
   private async getChannel(): Promise<Channel> {
@@ -64,7 +64,10 @@ export class QueuePublisherService implements OnModuleDestroy {
         },
       );
       await channel.assertQueue(
-        createStrategyDeadLetterQueueName(config.queue.queueName, routingStrategy),
+        createStrategyDeadLetterQueueName(
+          config.queue.queueName,
+          routingStrategy,
+        ),
         {
           durable: true,
         },
@@ -197,33 +200,30 @@ export class QueuePublisherService implements OnModuleDestroy {
     const channel = await this.getChannel();
     const config = getApiRuntimeConfig();
     const [
-      cloudscraperState,
+      httpState,
       playwrightState,
-      cloudscraperRetryState,
+      httpRetryState,
       playwrightRetryState,
-      cloudscraperDeadLetterState,
+      httpDeadLetterState,
       playwrightDeadLetterState,
       webhookState,
       webhookRetryState,
       webhookDeadLetterState,
     ] = await Promise.all([
       channel.checkQueue(
-        createStrategyQueueName(config.queue.queueName, 'cloudscraper'),
+        createStrategyQueueName(config.queue.queueName, 'http'),
       ),
       channel.checkQueue(
         createStrategyQueueName(config.queue.queueName, 'playwright'),
       ),
       channel.checkQueue(
-        createStrategyRetryQueueName(config.queue.queueName, 'cloudscraper'),
+        createStrategyRetryQueueName(config.queue.queueName, 'http'),
       ),
       channel.checkQueue(
         createStrategyRetryQueueName(config.queue.queueName, 'playwright'),
       ),
       channel.checkQueue(
-        createStrategyDeadLetterQueueName(
-          config.queue.queueName,
-          'cloudscraper',
-        ),
+        createStrategyDeadLetterQueueName(config.queue.queueName, 'http'),
       ),
       channel.checkQueue(
         createStrategyDeadLetterQueueName(config.queue.queueName, 'playwright'),
@@ -234,13 +234,12 @@ export class QueuePublisherService implements OnModuleDestroy {
     ]);
 
     return {
-      messageCount: cloudscraperState.messageCount + playwrightState.messageCount,
-      consumerCount:
-        cloudscraperState.consumerCount + playwrightState.consumerCount,
+      messageCount: httpState.messageCount + playwrightState.messageCount,
+      consumerCount: httpState.consumerCount + playwrightState.consumerCount,
       retryMessageCount:
-        cloudscraperRetryState.messageCount + playwrightRetryState.messageCount,
+        httpRetryState.messageCount + playwrightRetryState.messageCount,
       deadLetterMessageCount:
-        cloudscraperDeadLetterState.messageCount +
+        httpDeadLetterState.messageCount +
         playwrightDeadLetterState.messageCount,
       webhookMessageCount: webhookState.messageCount,
       webhookRetryMessageCount: webhookRetryState.messageCount,

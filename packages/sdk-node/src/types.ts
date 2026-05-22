@@ -14,7 +14,7 @@ export type JobStage =
   | "extracting"
   | "completed";
 
-export type ScrapeStrategy = "cloudscraper" | "playwright" | "auto";
+export type ScrapeStrategy = "http" | "playwright" | "auto" | "cloudscraper";
 
 export type ScrapeWaitUntil =
   | "load"

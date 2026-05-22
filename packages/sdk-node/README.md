@@ -56,7 +56,7 @@ For low-latency workloads (for example static pages with `cloudscraper`), use ad
 const { job, terminal, metrics } = await client.createAndWaitAdaptive(
   {
     url: "https://example.com",
-    strategy: "cloudscraper",
+    strategy: "http",
   },
   {
     autoIdempotencyKey: true,

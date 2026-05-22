@@ -25,7 +25,7 @@ export class WorkerRegistryService {
   ): WorkerAllowedStrategy[] {
     return worker.allowedStrategies?.length
       ? worker.allowedStrategies
-      : ['cloudscraper', 'playwright'];
+      : ['http', 'playwright'];
   }
 
   private supportsStrategy(
@@ -37,7 +37,12 @@ export class WorkerRegistryService {
     }
 
     const allowedStrategies = this.getAllowedStrategies(worker);
-    return strategy === 'auto' || allowedStrategies.includes(strategy);
+    if (strategy === 'auto') {
+      return true;
+    }
+
+    const normalizedStrategy = strategy === 'cloudscraper' ? 'http' : strategy;
+    return allowedStrategies.includes(normalizedStrategy);
   }
 
   private async resolveWorkerWithRoundRobin(
@@ -123,8 +128,9 @@ export class WorkerRegistryService {
       return null;
     }
 
-    const workers = (await this.getWorkersByServiceName(trimmedServiceName))
-      .filter((worker) => this.supportsStrategy(worker, strategy));
+    const workers = (
+      await this.getWorkersByServiceName(trimmedServiceName)
+    ).filter((worker) => this.supportsStrategy(worker, strategy));
     const rotationKey = `${this.config.redis.jobPrefix}:worker-service:${trimmedServiceName}:rr`;
 
     return this.resolveWorkerWithRoundRobin(workers, rotationKey);

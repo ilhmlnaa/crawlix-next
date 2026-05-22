@@ -125,10 +125,11 @@ export function DispatcherPage() {
     if (
       root.strategy !== undefined &&
       root.strategy !== "auto" &&
+      root.strategy !== "http" &&
       root.strategy !== "cloudscraper" &&
       root.strategy !== "playwright"
     ) {
-      return "Field `strategy` harus salah satu: auto, cloudscraper, playwright";
+      return "Field `strategy` harus salah satu: auto, http, playwright";
     }
 
     if (
@@ -436,9 +437,7 @@ export function DispatcherPage() {
                     </SelectTrigger>
                     <SelectContent className="bg-[#121828] border-[#1a2235] text-slate-200">
                       <SelectItem value="auto">Adaptive Fallback</SelectItem>
-                      <SelectItem value="cloudscraper">
-                        Cloudscraper Engine
-                      </SelectItem>
+                      <SelectItem value="http">HTTP Engine</SelectItem>
                       <SelectItem value="playwright">
                         Headless Playwright
                       </SelectItem>
@@ -583,8 +582,8 @@ export function DispatcherPage() {
               },
               {
                 icon: ShieldCheck,
-                label: "Cloudscraper",
-                desc: "Bypass L7 protection",
+                label: "HTTP",
+                desc: "Fast native fetch engine",
               },
               {
                 icon: Activity,

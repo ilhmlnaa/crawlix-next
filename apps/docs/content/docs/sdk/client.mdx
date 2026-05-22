@@ -36,7 +36,7 @@ The SDK sends `idempotencyKey` in the request body and also forwards it as the `
 const job = await client.createJob(
   {
     url: "https://example.com",
-    strategy: "cloudscraper",
+    strategy: "http",
   },
   {
     autoIdempotencyKey: true,

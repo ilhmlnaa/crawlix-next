@@ -145,10 +145,9 @@ export function WorkersPage() {
                   <MetaItem
                     icon={Clock}
                     label="Strategies"
-                    value={(worker.allowedStrategies ?? [
-                      "cloudscraper",
-                      "playwright",
-                    ]).join(", ")}
+                    value={(
+                      worker.allowedStrategies ?? ["http", "playwright"]
+                    ).join(", ")}
                   />
                 </div>
 

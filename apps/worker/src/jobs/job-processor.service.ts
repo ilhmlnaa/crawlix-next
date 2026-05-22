@@ -29,7 +29,12 @@ export class JobProcessorService implements OnModuleDestroy {
     strategy: ScrapeStrategy,
     allowedStrategies: WorkerAllowedStrategy[],
   ) {
-    return strategy === 'auto' || allowedStrategies.includes(strategy);
+    if (strategy === 'auto') {
+      return true;
+    }
+
+    const normalizedStrategy = strategy === 'cloudscraper' ? 'http' : strategy;
+    return allowedStrategies.includes(normalizedStrategy);
   }
 
   async process(job: ScrapeJobMessage): Promise<void> {

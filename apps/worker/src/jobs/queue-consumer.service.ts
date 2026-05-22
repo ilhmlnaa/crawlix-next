@@ -10,10 +10,7 @@ import amqp, {
   type ConsumeMessage,
 } from 'amqplib';
 import { getWorkerRuntimeConfig } from '@repo/config';
-import type {
-  RoutingStrategy,
-  ScrapeJobMessage,
-} from '@repo/queue-contracts';
+import type { RoutingStrategy, ScrapeJobMessage } from '@repo/queue-contracts';
 import {
   createStrategyDeadLetterQueueName,
   createStrategyQueueName,
@@ -370,13 +367,11 @@ export class QueueConsumerService
     return {
       connected: Boolean(this.connection && this.channel && this.consuming),
       queueName: config.queue.queueName,
-      retryQueueName: createStrategyQueueNames(
-        config.queue.queueName,
-        'cloudscraper',
-      ).retryQueueName,
+      retryQueueName: createStrategyQueueNames(config.queue.queueName, 'http')
+        .retryQueueName,
       deadLetterQueueName: createStrategyDeadLetterQueueName(
         config.queue.queueName,
-        'cloudscraper',
+        'http',
       ),
       subscribedQueues: this.subscribedQueues,
     };

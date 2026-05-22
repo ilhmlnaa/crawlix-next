@@ -39,7 +39,9 @@ export interface WorkerRuntimeConfig {
   port: number;
   processingWatchdogTimeoutMs: number;
   workerConcurrency: number;
-  allowedStrategies: Array<Exclude<ScraperRuntimeConfig["defaultStrategy"], "auto">>;
+  allowedStrategies: Array<
+    Exclude<ScraperRuntimeConfig["defaultStrategy"], "auto">
+  >;
   queue: QueueConfig;
   redis: RedisConfig;
   scraper: ScraperRuntimeConfig;
@@ -66,7 +68,7 @@ export interface WebhookRuntimeConfig {
 }
 
 export interface ScraperRuntimeConfig {
-  defaultStrategy: "cloudscraper" | "playwright" | "auto";
+  defaultStrategy: "http" | "playwright" | "auto";
   defaultTimeoutMs: number;
   defaultCacheTtlSeconds: number;
   maxRetries: number;
@@ -107,15 +109,16 @@ function parseProxyUrls(value: string | undefined): string[] {
 function parseAllowedStrategies(
   value: string | undefined,
 ): Array<Exclude<ScraperRuntimeConfig["defaultStrategy"], "auto">> {
-  const parsed = (value ?? "cloudscraper,playwright")
+  const parsed = (value ?? "http,playwright")
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean)
+    .map((item) => (item === "cloudscraper" ? "http" : item))
     .filter(
       (
         item,
       ): item is Exclude<ScraperRuntimeConfig["defaultStrategy"], "auto"> =>
-        item === "cloudscraper" || item === "playwright",
+        item === "http" || item === "playwright",
     );
 
   return Array.from(new Set(parsed));
@@ -412,18 +415,16 @@ function readScraperConfig(env: NodeJS.ProcessEnv): ScraperRuntimeConfig {
   const envProxyUrls = parseProxyUrls(env.SCRAPER_PROXY_URLS);
   const legacyProxyUrls =
     envProxyUrls.length > 0 ? [] : parseProxyUrls(env.SCRAPER_PROXY_URL);
-  const proxyUrls =
-    envProxyUrls.length > 0 ? envProxyUrls : legacyProxyUrls;
-  const forceProxy =
-    proxyUrls.length > 0 || env.SCRAPER_FORCE_PROXY === "true";
+  const proxyUrls = envProxyUrls.length > 0 ? envProxyUrls : legacyProxyUrls;
+  const forceProxy = proxyUrls.length > 0 || env.SCRAPER_FORCE_PROXY === "true";
 
   return {
     defaultStrategy:
-      defaultStrategy === "cloudscraper" ||
-      defaultStrategy === "playwright" ||
-      defaultStrategy === "auto"
+      defaultStrategy === "playwright" || defaultStrategy === "auto"
         ? defaultStrategy
-        : "auto",
+        : defaultStrategy === "http" || defaultStrategy === "cloudscraper"
+          ? "http"
+          : "auto",
     defaultTimeoutMs: readNumber(env.SCRAPER_TIMEOUT_MS, 30000),
     defaultCacheTtlSeconds: readNumber(env.SCRAPER_CACHE_TTL_SECONDS, 900),
     maxRetries: readNumber(env.SCRAPER_MAX_RETRIES, 2),

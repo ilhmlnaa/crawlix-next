@@ -16,8 +16,8 @@ export type ScrapeJobStage =
   | "extracting"
   | "completed";
 
-export type ScrapeStrategy = "cloudscraper" | "playwright" | "auto";
-export type WorkerAllowedStrategy = Exclude<ScrapeStrategy, "auto">;
+export type ScrapeStrategy = "http" | "playwright" | "auto" | "cloudscraper";
+export type WorkerAllowedStrategy = "http" | "playwright";
 export type RoutingStrategy = WorkerAllowedStrategy;
 
 export type ScrapeWaitUntil =

@@ -57,7 +57,7 @@ export class JobsService {
   ): WorkerAllowedStrategy[] {
     return worker.allowedStrategies?.length
       ? worker.allowedStrategies
-      : ['cloudscraper', 'playwright'];
+      : ['http', 'playwright'];
   }
 
   private ensureWorkerSupportsStrategy(
@@ -68,8 +68,9 @@ export class JobsService {
       return;
     }
 
+    const normalizedStrategy = strategy === 'cloudscraper' ? 'http' : strategy;
     const allowedStrategies = this.getWorkerAllowedStrategies(worker);
-    if (allowedStrategies.includes(strategy)) {
+    if (allowedStrategies.includes(normalizedStrategy)) {
       return;
     }
 
@@ -158,7 +159,10 @@ export class JobsService {
   ): Promise<EnqueueJobResponse> {
     const config = getApiRuntimeConfig();
     const requestedAt = nowIso();
-    const strategy = input.strategy ?? config.scraper.defaultStrategy;
+    const strategy =
+      input.strategy === 'cloudscraper'
+        ? 'http'
+        : (input.strategy ?? config.scraper.defaultStrategy);
     const options = {
       useCache: true,
       maxRetries: config.scraper.maxRetries,
@@ -220,11 +224,10 @@ export class JobsService {
 
       targetWorkerId = worker.workerId;
     } else if (targetWorkerHostname) {
-      const worker =
-        await this.workerRegistry.resolveWorkerByHostname(
-          targetWorkerHostname,
-          strategy,
-        );
+      const worker = await this.workerRegistry.resolveWorkerByHostname(
+        targetWorkerHostname,
+        strategy,
+      );
 
       if (!worker) {
         throw new NotFoundException(

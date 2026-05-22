@@ -140,7 +140,7 @@ curl http://localhost:3001/api/jobs/job_01hrx8qj2b1j6m3n9t1/result \
   "progress": 100,
   "stage": "completed",
   "url": "https://example.com",
-  "strategy": "cloudscraper",
+  "strategy": "http",
   "requestedAt": "2026-04-11T07:10:25.000Z",
   "completedAt": "2026-04-11T07:10:33.000Z",
   "preview": "<!doctype html><html><head><title>Example Domain</title>",
@@ -206,7 +206,7 @@ If you want proxy routing per job, use `options.useProxy` and optionally `option
 
 ## Notes
 
-- `strategy` supports `auto`, `cloudscraper`, and `playwright`.
+- `strategy` supports `auto`, `http`, and `playwright`. Legacy `cloudscraper` values are accepted and normalized to `http`.
 - `auto` is the recommended default.
 - `targetWorkerId` is optional. Omit it to let Crawlix Next auto-assign the job through the shared queue.
 - `webhookUrl` is optional. When present, Crawlix Next will push terminal job events like `job.completed` and `job.failed` to that endpoint.

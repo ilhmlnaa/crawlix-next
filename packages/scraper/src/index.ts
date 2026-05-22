@@ -58,7 +58,7 @@ export interface ScrapeExecutionContext {
         }
       | {
           type: "fallback_started";
-          from: "cloudscraper";
+          from: "http";
           to: "playwright";
           attempt: number;
           reason?: string;
@@ -158,15 +158,18 @@ function resolveAutoPrimaryStrategy(
   defaultStrategy: ScrapeStrategy,
   allowedStrategies: WorkerAllowedStrategy[],
 ): WorkerAllowedStrategy {
+  const normalizedDefaultStrategy =
+    defaultStrategy === "cloudscraper" ? "http" : defaultStrategy;
+
   if (
-    defaultStrategy !== "auto" &&
-    allowedStrategies.includes(defaultStrategy)
+    normalizedDefaultStrategy !== "auto" &&
+    allowedStrategies.includes(normalizedDefaultStrategy)
   ) {
-    return defaultStrategy;
+    return normalizedDefaultStrategy;
   }
 
-  if (allowedStrategies.includes("cloudscraper")) {
-    return "cloudscraper";
+  if (allowedStrategies.includes("http")) {
+    return "http";
   }
 
   return "playwright";
@@ -191,27 +194,33 @@ function resolveStrategyPlan(
     };
   }
 
+  const normalizedRequestedStrategy =
+    requestedStrategy === "cloudscraper" ? "http" : requestedStrategy;
+
   if (
-    requestedStrategy !== "auto" &&
-    !allowedStrategies.includes(requestedStrategy)
+    normalizedRequestedStrategy !== "auto" &&
+    !allowedStrategies.includes(normalizedRequestedStrategy)
   ) {
     return {
       error: `Worker strategy restriction: requested "${requestedStrategy}" but this worker only allows [${allowedStrategies.join(", ")}].`,
     };
   }
 
-  if (requestedStrategy !== "auto") {
+  if (normalizedRequestedStrategy !== "auto") {
     return {
-      primary: requestedStrategy,
+      primary: normalizedRequestedStrategy,
     };
   }
 
-  const primary = resolveAutoPrimaryStrategy(defaultStrategy, allowedStrategies);
+  const primary = resolveAutoPrimaryStrategy(
+    defaultStrategy,
+    allowedStrategies,
+  );
 
   return {
     primary,
     fallback:
-      primary === "cloudscraper" && allowedStrategies.includes("playwright")
+      primary === "http" && allowedStrategies.includes("playwright")
         ? "playwright"
         : undefined,
   };
@@ -489,64 +498,12 @@ async function executeHttpFetch(
   }
 }
 
-class CloudscraperStrategy implements ScraperStrategy {
+class HttpStrategy implements ScraperStrategy {
   async execute(
     job: ScrapeJobMessage,
     context: ResolvedScrapeExecutionContext,
   ): Promise<ScraperStrategyResult> {
-    const dynamicImport = new Function(
-      "specifier",
-      "return import(specifier)",
-    ) as (specifier: string) => Promise<any>;
-
-    try {
-      await context.onStageChange("fetching", 15);
-      await context.onEvent({
-        type: "stage",
-        stage: "fetching",
-        progress: 15,
-      });
-      const cloudscraperModule = await dynamicImport("cloudscraper");
-      const cloudscraper = cloudscraperModule.default ?? cloudscraperModule;
-      const startedAt = Date.now();
-      const proxyUrl = resolveProxyUrl(
-        job.options,
-        context.config,
-        context.proxyRuntime,
-      );
-      const response = await cloudscraper({
-        uri: new URL(job.url).href,
-        method: job.options.method ?? "GET",
-        body: job.options.body,
-        form: job.options.formData,
-        headers: buildHeaders(job.options, context.config),
-        timeout: readTimeout(job.options, context.config),
-        proxy: proxyUrl,
-        gzip: true,
-        resolveWithFullResponse: true,
-      });
-
-      const content =
-        typeof response.body === "string"
-          ? response.body
-          : JSON.stringify(response.body);
-      await context.onStageChange("extracting", 85);
-      await context.onEvent({
-        type: "stage",
-        stage: "extracting",
-        progress: 85,
-      });
-
-      return {
-        success: true,
-        content,
-        contentType: response.headers["content-type"] ?? "text/html",
-        method: proxyUrl ? "cloudscraper-proxy" : "cloudscraper-direct",
-        responseTimeMs: Date.now() - startedAt,
-      };
-    } catch {
-      return executeHttpFetch(job, context, "cloudscraper-http-fallback");
-    }
+    return executeHttpFetch(job, context, "http-direct");
   }
 }
 
@@ -826,12 +783,9 @@ class PlaywrightStrategy implements ScraperStrategy {
   }
 }
 
-function createStrategies(): Record<
-  Exclude<ScrapeStrategy, "auto">,
-  ScraperStrategy
-> {
+function createStrategies(): Record<WorkerAllowedStrategy, ScraperStrategy> {
   return {
-    cloudscraper: new CloudscraperStrategy(),
+    http: new HttpStrategy(),
     playwright: new PlaywrightStrategy(),
   };
 }
@@ -942,17 +896,14 @@ export class ScraperService {
       if (strategyPlan.fallback) {
         await resolvedContext.onEvent({
           type: "fallback_started",
-          from: "cloudscraper",
+          from: "http",
           to: "playwright",
           attempt,
           reason: execution.error ?? "Primary strategy failed",
         });
         const fallbackExecution = await this.strategies[
           strategyPlan.fallback
-        ].execute(
-          job,
-          resolvedContext,
-        );
+        ].execute(job, resolvedContext);
 
         if (fallbackExecution.success) {
           await resolvedContext.onEvent({

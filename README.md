@@ -167,7 +167,7 @@ crawlix-next/
 | Queue broker       | RabbitMQ                                                                        |
 | State and cache    | Redis                                                                           |
 | Monorepo tooling   | pnpm, Turborepo                                                                 |
-| Scraping execution | Shared scraper package with `auto`, `cloudscraper`, and `playwright` strategies |
+| Scraping execution | Shared scraper package with `auto`, `http`, and `playwright` strategies |
 | Documentation      | Fumadocs                                                                        |
 | Containerization   | Docker, Docker Compose                                                          |
 
@@ -323,20 +323,20 @@ For service-name-targeted jobs, set `WORKER_SERVICE_NAME` to a stable logical gr
 
 `WORKER_HOSTNAME` is still supported for exact worker identity, but it is not the grouping key. If you later want strict group-based routing separate from service name, that can be added as a distinct field without changing the current worker targeting flow.
 
-`WORKER_ALLOWED_STRATEGIES` controls which scrape engines a worker is allowed to execute. Supported values are comma-separated `cloudscraper` and `playwright`. Examples:
+`WORKER_ALLOWED_STRATEGIES` controls which scrape engines a worker is allowed to execute. Supported values are comma-separated `http` and `playwright`. Legacy `cloudscraper` values are accepted and normalized to `http`. Examples:
 
-- `WORKER_ALLOWED_STRATEGIES=cloudscraper`
+- `WORKER_ALLOWED_STRATEGIES=http`
 - `WORKER_ALLOWED_STRATEGIES=playwright`
-- `WORKER_ALLOWED_STRATEGIES=cloudscraper,playwright`
+- `WORKER_ALLOWED_STRATEGIES=http,playwright`
 
 This variable is enforced by the worker at execution time and is also published in worker heartbeat metadata so targeted dispatch can avoid incompatible workers. `SCRAPER_DEFAULT_STRATEGY` remains the job-level default, while `WORKER_ALLOWED_STRATEGIES` defines runtime capability for that worker instance.
 
 Non-targeted jobs are routed into strategy-specific shared queues:
 
-- `crawlix.scrape.jobs.cloudscraper`
+- `crawlix.scrape.jobs.http`
 - `crawlix.scrape.jobs.playwright`
 
-`strategy=auto` is published to the `cloudscraper` queue by default. Exact `targetWorkerId` remains strict, while `targetWorkerServiceName` and `targetWorkerHostname` can still resolve to another compatible worker inside the same logical group.
+`strategy=auto` is published to the `http` queue by default. Exact `targetWorkerId` remains strict, while `targetWorkerServiceName` and `targetWorkerHostname` can still resolve to another compatible worker inside the same logical group.
 
 This matters especially for Docker deployment:
 

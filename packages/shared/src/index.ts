@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 
-export type RoutingStrategy = "cloudscraper" | "playwright";
-export type SupportedScrapeStrategy = RoutingStrategy | "auto";
+export type RoutingStrategy = "http" | "playwright";
+export type SupportedScrapeStrategy = RoutingStrategy | "auto" | "cloudscraper";
 
 export interface ServiceMetadata {
   name: string;
@@ -143,7 +143,7 @@ export function createTargetedDeadLetterQueueName(
 export function resolveRoutingStrategy(
   strategy: SupportedScrapeStrategy,
 ): RoutingStrategy {
-  return strategy === "playwright" ? "playwright" : "cloudscraper";
+  return strategy === "playwright" ? "playwright" : "http";
 }
 
 export function createStrategyQueueName(
