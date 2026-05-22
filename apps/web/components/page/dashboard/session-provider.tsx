@@ -50,6 +50,7 @@ export interface DashboardSessionValue {
   authLoading: boolean;
   overview: JobsOverviewSnapshot | null;
   refreshing: boolean;
+  refreshNonce: number;
   apiKeys: ApiKeyRecord[];
   loadingApiKeys: boolean;
   creatingApiKey: boolean;
@@ -137,6 +138,7 @@ export function DashboardSessionProvider({
   const [password, setPassword] = useState("");
   const [overview, setOverview] = useState<JobsOverviewSnapshot | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [apiKeys, setApiKeys] = useState<ApiKeyRecord[]>([]);
   const [loadingApiKeys, setLoadingApiKeys] = useState(false);
   const [creatingApiKey, setCreatingApiKey] = useState(false);
@@ -299,6 +301,7 @@ export function DashboardSessionProvider({
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    setRefreshNonce((n) => n + 1);
     await Promise.all([
       loadOverview(),
       loadApiKeys(),
@@ -435,14 +438,17 @@ export function DashboardSessionProvider({
     input: Pick<ProxyPolicy, "enabled" | "mode" | "proxies">,
   ) => {
     setSavingProxySettings(true);
-    const saved = await fetchJson<ProxyPolicy>(`${apiBaseUrl}/admin/proxy/global`, {
-      method: "PUT",
-      body: JSON.stringify({
-        ...input,
-        scopeType: "global",
-        strategy: "round_robin",
-      }),
-    });
+    const saved = await fetchJson<ProxyPolicy>(
+      `${apiBaseUrl}/admin/proxy/global`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          ...input,
+          scopeType: "global",
+          strategy: "round_robin",
+        }),
+      },
+    );
     await loadProxySettings();
     setSavingProxySettings(false);
     if (saved) {
@@ -509,6 +515,7 @@ export function DashboardSessionProvider({
         authLoading,
         overview,
         refreshing,
+        refreshNonce,
         apiKeys,
         loadingApiKeys,
         creatingApiKey,

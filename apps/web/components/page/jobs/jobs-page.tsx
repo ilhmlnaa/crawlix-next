@@ -90,7 +90,7 @@ function isHtmlLike(result: ScrapeJobResult | null): boolean {
 export function JobsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { overview, handleRetry, handleCancel, apiBaseUrl } =
+  const { overview, handleRetry, handleCancel, apiBaseUrl, refreshNonce } =
     useDashboardSession();
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<ScrapeJobResult | null>(
@@ -101,6 +101,7 @@ export function JobsPage() {
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [pagedJobs, setPagedJobs] = useState<ScrapeJobRecord[]>([]);
+  const [fetchedJob, setFetchedJob] = useState<ScrapeJobRecord | null>(null);
   const [jobsPage, setJobsPage] = useState(1);
   const [totalJobs, setTotalJobs] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -139,7 +140,7 @@ export function JobsPage() {
 
   useEffect(() => {
     void loadJobs();
-  }, [loadJobs]);
+  }, [loadJobs, refreshNonce]);
 
   const jobs = useMemo(() => {
     if (!searchQuery) return pagedJobs;
@@ -150,7 +151,8 @@ export function JobsPage() {
     );
   }, [pagedJobs, searchQuery]);
 
-  const selectedJob = pagedJobs.find((j) => j.jobId === selectedJobId) ?? null;
+  const selectedJob =
+    pagedJobs.find((j) => j.jobId === selectedJobId) ?? fetchedJob;
 
   const proxyEnabled =
     selectedResult?.proxyEnabled ??
@@ -173,6 +175,35 @@ export function JobsPage() {
       setSelectedJobId(jobIdFromQuery);
     }
   }, [searchParams, selectedJobId]);
+
+  useEffect(() => {
+    if (!selectedJobId) {
+      setFetchedJob(null);
+      return;
+    }
+    const inPage = pagedJobs.some((j) => j.jobId === selectedJobId);
+    if (inPage) {
+      setFetchedJob(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchJob = async () => {
+      try {
+        const res = await fetch(`${apiBaseUrl}/jobs/${selectedJobId}`, {
+          credentials: "include",
+        });
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as ScrapeJobRecord;
+        if (!cancelled) setFetchedJob(data);
+      } catch {
+        if (!cancelled) setFetchedJob(null);
+      }
+    };
+    void fetchJob();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiBaseUrl, selectedJobId, pagedJobs]);
 
   const workerById = useMemo(() => {
     const map = new Map<string, WorkerHeartbeat>();
@@ -296,6 +327,7 @@ export function JobsPage() {
 
   const openJobDetail = (jobId: string) => {
     setSelectedJobId(jobId);
+    setSelectedResult(null);
     router.replace(`/jobs?jobId=${jobId}`);
   };
 
