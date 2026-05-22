@@ -174,6 +174,7 @@ export class ApiKeyService {
     const updated: StoredApiKeyRecord = {
       ...stored,
       lastUsedAt: new Date().toISOString(),
+      usageCount: (stored.usageCount ?? 0) + 1,
     };
     const redis = await this.getRedis();
     await redis.set(this.getRecordKey(parsed.keyId), JSON.stringify(updated));

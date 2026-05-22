@@ -212,6 +212,9 @@ export function ApiKeyPanel({
                         Rate Limit
                       </TableHead>
                       <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">
+                        Usage
+                      </TableHead>
+                      <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">
                         Preview
                       </TableHead>
                       <TableHead className="text-xs font-bold text-slate-500 uppercase tracking-wider h-11">
@@ -246,6 +249,9 @@ export function ApiKeyPanel({
                           apiKey.rateLimit === undefined
                             ? "∞ Unlimited"
                             : `${apiKey.rateLimit}/min`}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-300 font-mono tabular-nums">
+                          {(apiKey.usageCount ?? 0).toLocaleString("en-US")}
                         </TableCell>
                         <TableCell className="font-mono text-[11px] text-slate-400">
                           {apiKey.keyPreview}

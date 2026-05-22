@@ -309,6 +309,7 @@ export interface ApiKeyRecord {
   revokedAt?: string;
   lastUsedAt?: string;
   rateLimit?: number | null;
+  usageCount?: number;
 }
 
 export interface CreateApiKeyInput {
