@@ -83,6 +83,63 @@ Backward compatibility note:
 - Existing calls keep the same behavior by default (`pollingMode: 'fixed'`, `intervalMs: 2000`).
 - New options are additive and optional.
 
+## Webhook Integration (Recommended for Production)
+
+For production workloads, webhooks eliminate polling entirely. Instead of repeatedly checking job status, the worker pushes results directly to your endpoint when a job completes.
+
+### Why webhooks over polling?
+
+- **0 polling requests** — no rate limit usage for status checks
+- **Real-time** — notified the moment a job finishes
+- **Scalable** — handles thousands of concurrent jobs without multiplying API calls
+
+### Submit a job with webhook
+
+```ts
+const job = await client.createJob({
+  url: "https://example.com",
+  strategy: "http",
+  webhookUrl: "https://your-server.com/crawlix/webhook",
+  webhookSecret: "your-hmac-secret",
+});
+// No need to call waitForCompletion — the result comes to you
+```
+
+### Receive and verify webhook
+
+```ts
+import { assertWebhookSignature, parseWebhookEvent } from "@crawlixnext/sdk-node";
+
+app.post("/crawlix/webhook", (req, res) => {
+  assertWebhookSignature({
+    secret: "your-hmac-secret",
+    timestamp: req.headers["x-crawlix-timestamp"],
+    rawBody: req.body, // must be raw Buffer, not parsed JSON
+    signature: req.headers["x-crawlix-signature"],
+  });
+
+  const event = parseWebhookEvent(JSON.parse(req.body.toString()));
+
+  if (event.event === "job.completed") {
+    // Fetch full result if needed
+    const result = await client.getJobResult(event.data.jobId);
+  }
+
+  res.sendStatus(200);
+});
+```
+
+### Webhook events
+
+| Event | When |
+|---|---|
+| `job.completed` | Job finished successfully |
+| `job.failed` | Job failed after all retries |
+| `job.cancelled` | Job was cancelled |
+| `job.timeout` | Job exceeded timeout |
+
+See `examples/crawlix-webhook/` for a complete working example with Express.
+
 ## Features
 
 - API key authenticated client

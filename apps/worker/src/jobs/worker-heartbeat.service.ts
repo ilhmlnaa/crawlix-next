@@ -80,6 +80,7 @@ export class WorkerHeartbeatService
       deadLetterQueueName: targetedQueues.deadLetterQueueName,
       allowedStrategies: this.config.allowedStrategies,
       hostname: this.workerHostname,
+      ipType: this.config.workerIpType,
       pid: process.pid,
       status: this.status,
       startedAt: this.startedAt,

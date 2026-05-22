@@ -1,57 +1,106 @@
 ---
 title: Webhooks
-description: Verify Crawlix webhook signatures in your Node.js application.
+description: Receive job results via push notification instead of polling.
 ---
 
-## Verify a webhook signature
+## Overview
+
+Webhooks let Crawlix push job results directly to your server when a job reaches a terminal state. This eliminates polling entirely.
+
+| Approach | Requests per job | Latency | Rate limit impact |
+|---|---|---|---|
+| Polling (adaptive) | 7–11 | 4–7s overhead | High |
+| Webhook | 1 (create only) | Real-time | Minimal |
+
+## Setup
+
+### 1. Create a job with webhookUrl
 
 ```ts
-import { verifyWebhookSignature } from '@crawlixnext/sdk-node';
+import { CrawlixClient } from "@crawlixnext/sdk-node";
 
-const isValid = verifyWebhookSignature({
-  secret: process.env.CRAWLIX_WEBHOOK_SECRET!,
-  timestamp: request.headers['x-crawlix-timestamp']!,
-  signature: request.headers['x-crawlix-signature']!,
-  rawBody,
+const client = new CrawlixClient({
+  baseUrl: "https://api.example.com",
+  apiKey: "cx_xxx",
+});
+
+const job = await client.createJob({
+  url: "https://target.com",
+  strategy: "http",
+  webhookUrl: "https://your-server.com/crawlix/webhook",
+  webhookSecret: "your-secret",
 });
 ```
 
-## Throw on invalid signatures
+### 2. Receive the webhook
 
 ```ts
-import { assertWebhookSignature } from '@crawlixnext/sdk-node';
+import express from "express";
+import { assertWebhookSignature, parseWebhookEvent } from "@crawlixnext/sdk-node";
 
-assertWebhookSignature({
-  secret: process.env.CRAWLIX_WEBHOOK_SECRET!,
-  timestamp: request.headers['x-crawlix-timestamp']!,
-  signature: request.headers['x-crawlix-signature']!,
-  rawBody,
+const app = express();
+app.use("/crawlix/webhook", express.raw({ type: "application/json" }));
+
+app.post("/crawlix/webhook", (req, res) => {
+  const timestamp = req.headers["x-crawlix-timestamp"];
+  const signature = req.headers["x-crawlix-signature"];
+
+  assertWebhookSignature({
+    secret: "your-secret",
+    timestamp,
+    rawBody: req.body,
+    signature,
+  });
+
+  const event = parseWebhookEvent(JSON.parse(req.body.toString()));
+  console.log(event.event, event.data.jobId, event.data.status);
+
+  res.sendStatus(200);
 });
+
+app.listen(4000);
 ```
 
-## Parse the event payload
+## Signature Verification
 
-```ts
-import { parseWebhookEvent } from '@crawlixnext/sdk-node';
+Every webhook request includes two headers:
 
-const event = parseWebhookEvent(rawBody);
+- `x-crawlix-timestamp` — ISO timestamp of when the event was sent
+- `x-crawlix-signature` — HMAC-SHA256 of `timestamp.rawBody` using your secret
 
-if (event.event === 'job.completed') {
-  console.log(event.data.jobId);
+Always verify the signature before processing the payload.
+
+## Event Payload
+
+```json
+{
+  "event": "job.completed",
+  "eventId": "uuid",
+  "timestamp": "2026-05-22T00:00:00.000Z",
+  "data": {
+    "jobId": "uuid",
+    "status": "completed",
+    "url": "https://target.com",
+    "strategy": "http",
+    "requestedAt": "...",
+    "completedAt": "..."
+  }
 }
 ```
 
-## Header summary
+## Events
 
-Webhook requests from Crawlix Next include:
+| Event | Description |
+|---|---|
+| `job.completed` | Scrape finished successfully |
+| `job.failed` | Failed after all retries |
+| `job.cancelled` | Cancelled before or during processing |
+| `job.timeout` | Exceeded configured timeout |
 
-- `x-crawlix-event`
-- `x-crawlix-event-id`
-- `x-crawlix-timestamp`
-- `x-crawlix-signature`
+## Retry Behavior
 
-## Notes
+Webhook delivery is retried automatically via a dedicated retry queue. Failed deliveries do not block scrape workers.
 
-- The SDK expects the raw request body, not a re-serialized object.
-- Signature verification uses HMAC SHA-256.
-- Use the same secret configured in Crawlix through `WEBHOOK_SIGNING_SECRET` or the per-job `webhookSecret`.
+## Full Example
+
+See [`examples/crawlix-webhook/`](https://github.com/ilhmlnaa/crawlix-next/tree/main/examples/crawlix-webhook) for a complete working project with Express server and job submission script.

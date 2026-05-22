@@ -36,6 +36,7 @@ export interface ApiRuntimeConfig {
 export interface WorkerRuntimeConfig {
   serviceName: string;
   workerHostname: string;
+  workerIpType: "datacenter" | "residential" | "unknown";
   port: number;
   processingWatchdogTimeoutMs: number;
   workerConcurrency: number;
@@ -489,12 +490,17 @@ export function getWorkerRuntimeConfig(
   return {
     serviceName: env.WORKER_SERVICE_NAME ?? "crawlix-worker",
     workerHostname: env.WORKER_HOSTNAME ?? os.hostname(),
+    workerIpType:
+      env.WORKER_IP_TYPE === "datacenter" ||
+      env.WORKER_IP_TYPE === "residential"
+        ? env.WORKER_IP_TYPE
+        : "unknown",
     port: Number(env.PORT ?? readPort(env, "WORKER_PORT", 3002)),
     processingWatchdogTimeoutMs: readNumber(
       env.WORKER_PROCESSING_WATCHDOG_TIMEOUT_MS,
       5 * 60 * 1000,
     ),
-    workerConcurrency: readNumber(env.WORKER_CONCURRENCY, 2),
+    workerConcurrency: readNumber(env.WORKER_CONCURRENCY, 4),
     allowedStrategies: parseAllowedStrategies(env.WORKER_ALLOWED_STRATEGIES),
     queue: readQueueConfig(env),
     redis: readRedisConfig(env),

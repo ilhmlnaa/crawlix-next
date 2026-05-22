@@ -109,16 +109,6 @@ export class JobProcessorService implements OnModuleDestroy {
     await this.workerHeartbeat.markProcessing(job.jobId);
     await this.jobStore.updateStatus(job.jobId, 'processing');
     await this.jobStore.updateProgress(job.jobId, 5, 'fetching');
-    const proxySettings = await this.proxyPolicyService.resolveForJob(job);
-    await this.jobStore.patchRecord(job.jobId, {
-      proxyEnabled: proxySettings.enabled,
-      proxyUrl: proxySettings.proxyDisplayUrl,
-      proxySource: proxySettings.source,
-      proxyScopeType: proxySettings.scopeType,
-      proxyScopeKey: proxySettings.scopeKey,
-      proxyPoolSize: proxySettings.proxyPoolSize,
-      proxyIndex: proxySettings.proxyIndex,
-    });
 
     if (!this.isStrategyAllowed(job.strategy, allowedStrategies)) {
       throw new Error(
@@ -138,115 +128,158 @@ export class JobProcessorService implements OnModuleDestroy {
           strategy: job.strategy,
         }),
       );
+
       if (cachedResult) {
-        await this.jobStore.updateProgress(job.jobId, 100, 'completed');
+        const result = {
+          ...cachedResult,
+          targetWorkerId: job.targetWorkerId,
+          targetWorkerHostname: job.targetWorkerHostname,
+          executedWorkerId: this.workerHeartbeat.getWorkerId(),
+          executedServiceName: this.workerHeartbeat.getServiceName(),
+          retriedFromJobId: job.retriedFromJobId,
+          webhookUrl: job.webhookUrl,
+          idempotencyKey: job.idempotencyKey,
+        };
+
+        await Promise.all([
+          this.jobStore.updateStatus(job.jobId, 'completed'),
+          this.jobStore.updateProgress(job.jobId, 100, 'completed'),
+          this.jobStore.saveResult(result),
+          this.webhookDispatcher.enqueueFromResult(result, job.webhookSecret),
+        ]);
+
+        this.logger.log(
+          JSON.stringify({
+            event: 'job.processing.completed',
+            jobId: job.jobId,
+            workerId: this.workerHeartbeat.getWorkerId(),
+            targetWorkerId: job.targetWorkerId ?? null,
+            strategy: result.strategy,
+            cached: true,
+            method: result.method ?? null,
+            responseTimeMs: result.responseTimeMs ?? null,
+            durationMs: Date.now() - startedAt,
+          }),
+        );
+
+        await this.workerHeartbeat.markIdle(true);
+        return;
       }
 
-      const executionResult =
-        cachedResult ??
-        (await this.scraper.execute(job, {
-          allowedStrategies,
-          config: config.scraper,
-          proxyRuntime: proxySettings,
-          onStageChange: async (stage, progress) => {
-            await this.jobStore.updateProgress(job.jobId, progress, stage);
-          },
-          onEvent: async (event) => {
-            switch (event.type) {
-              case 'stage':
-                this.logger.log(
-                  JSON.stringify({
-                    event: 'job.stage.changed',
-                    jobId: job.jobId,
-                    workerId: this.workerHeartbeat.getWorkerId(),
-                    targetWorkerId: job.targetWorkerId ?? null,
-                    stage: event.stage,
-                    progress: event.progress,
-                  }),
-                );
-                break;
-              case 'strategy_selected':
-                this.logger.log(
-                  JSON.stringify({
-                    event: 'scraper.strategy.selected',
-                    jobId: job.jobId,
-                    workerId: this.workerHeartbeat.getWorkerId(),
-                    requestedStrategy: event.requestedStrategy,
-                    strategy: event.strategy,
-                  }),
-                );
-                break;
-              case 'attempt_started':
-                this.logger.log(
-                  JSON.stringify({
-                    event: 'job.attempt.started',
-                    jobId: job.jobId,
-                    workerId: this.workerHeartbeat.getWorkerId(),
-                    strategy: event.strategy,
-                    attempt: event.attempt,
-                    maxRetries: event.maxRetries,
-                  }),
-                );
-                break;
-              case 'strategy_succeeded':
-                this.logger.log(
-                  JSON.stringify({
-                    event: 'scraper.strategy.succeeded',
-                    jobId: job.jobId,
-                    workerId: this.workerHeartbeat.getWorkerId(),
-                    strategy: event.strategy,
-                    attempt: event.attempt,
-                    method: event.method,
-                    responseTimeMs: event.responseTimeMs,
-                  }),
-                );
-                break;
-              case 'strategy_failed':
-                this.logger.warn(
-                  JSON.stringify({
-                    event: 'scraper.strategy.failed',
-                    jobId: job.jobId,
-                    workerId: this.workerHeartbeat.getWorkerId(),
-                    strategy: event.strategy,
-                    attempt: event.attempt,
-                    method: event.method ?? null,
-                    error: event.error ?? 'Unknown scrape error',
-                  }),
-                );
-                break;
-              case 'fallback_started': {
-                const reason =
-                  'reason' in event && typeof event.reason === 'string'
-                    ? event.reason
-                    : null;
-                this.logger.warn(
-                  JSON.stringify({
-                    event: 'scraper.strategy.fallback',
-                    jobId: job.jobId,
-                    workerId: this.workerHeartbeat.getWorkerId(),
-                    from: event.from,
-                    to: event.to,
-                    attempt: event.attempt,
-                    reason,
-                  }),
-                );
-                break;
-              }
-              case 'retry_scheduled':
-                this.logger.warn(
-                  JSON.stringify({
-                    event: 'job.retry.scheduled',
-                    jobId: job.jobId,
-                    workerId: this.workerHeartbeat.getWorkerId(),
-                    attempt: event.attempt,
-                    nextAttempt: event.nextAttempt,
-                    delayMs: event.delayMs,
-                  }),
-                );
-                break;
+      const proxySettings = await this.proxyPolicyService.resolveForJob(job);
+      await this.jobStore.patchRecord(job.jobId, {
+        proxyEnabled: proxySettings.enabled,
+        proxyUrl: proxySettings.proxyDisplayUrl,
+        proxySource: proxySettings.source,
+        proxyScopeType: proxySettings.scopeType,
+        proxyScopeKey: proxySettings.scopeKey,
+        proxyPoolSize: proxySettings.proxyPoolSize,
+        proxyIndex: proxySettings.proxyIndex,
+      });
+
+      const executionResult = await this.scraper.execute(job, {
+        allowedStrategies,
+        config: config.scraper,
+        proxyRuntime: proxySettings,
+        onStageChange: async (stage, progress) => {
+          await this.jobStore.updateProgress(job.jobId, progress, stage);
+        },
+        onEvent: async (event) => {
+          switch (event.type) {
+            case 'stage':
+              this.logger.log(
+                JSON.stringify({
+                  event: 'job.stage.changed',
+                  jobId: job.jobId,
+                  workerId: this.workerHeartbeat.getWorkerId(),
+                  targetWorkerId: job.targetWorkerId ?? null,
+                  stage: event.stage,
+                  progress: event.progress,
+                }),
+              );
+              break;
+            case 'strategy_selected':
+              this.logger.log(
+                JSON.stringify({
+                  event: 'scraper.strategy.selected',
+                  jobId: job.jobId,
+                  workerId: this.workerHeartbeat.getWorkerId(),
+                  requestedStrategy: event.requestedStrategy,
+                  strategy: event.strategy,
+                }),
+              );
+              break;
+            case 'attempt_started':
+              this.logger.log(
+                JSON.stringify({
+                  event: 'job.attempt.started',
+                  jobId: job.jobId,
+                  workerId: this.workerHeartbeat.getWorkerId(),
+                  strategy: event.strategy,
+                  attempt: event.attempt,
+                  maxRetries: event.maxRetries,
+                }),
+              );
+              break;
+            case 'strategy_succeeded':
+              this.logger.log(
+                JSON.stringify({
+                  event: 'scraper.strategy.succeeded',
+                  jobId: job.jobId,
+                  workerId: this.workerHeartbeat.getWorkerId(),
+                  strategy: event.strategy,
+                  attempt: event.attempt,
+                  method: event.method,
+                  responseTimeMs: event.responseTimeMs,
+                }),
+              );
+              break;
+            case 'strategy_failed':
+              this.logger.warn(
+                JSON.stringify({
+                  event: 'scraper.strategy.failed',
+                  jobId: job.jobId,
+                  workerId: this.workerHeartbeat.getWorkerId(),
+                  strategy: event.strategy,
+                  attempt: event.attempt,
+                  method: event.method ?? null,
+                  error: event.error ?? 'Unknown scrape error',
+                }),
+              );
+              break;
+            case 'fallback_started': {
+              const reason =
+                'reason' in event && typeof event.reason === 'string'
+                  ? event.reason
+                  : null;
+              this.logger.warn(
+                JSON.stringify({
+                  event: 'scraper.strategy.fallback',
+                  jobId: job.jobId,
+                  workerId: this.workerHeartbeat.getWorkerId(),
+                  from: event.from,
+                  to: event.to,
+                  attempt: event.attempt,
+                  reason,
+                }),
+              );
+              break;
             }
-          },
-        }));
+            case 'retry_scheduled':
+              this.logger.warn(
+                JSON.stringify({
+                  event: 'job.retry.scheduled',
+                  jobId: job.jobId,
+                  workerId: this.workerHeartbeat.getWorkerId(),
+                  attempt: event.attempt,
+                  nextAttempt: event.nextAttempt,
+                  delayMs: event.delayMs,
+                }),
+              );
+              break;
+          }
+        },
+      });
 
       if (
         job.strategy === 'playwright' &&

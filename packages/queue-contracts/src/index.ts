@@ -210,6 +210,7 @@ export interface WorkerHeartbeat {
   deadLetterQueueName: string;
   allowedStrategies: WorkerAllowedStrategy[];
   hostname: string;
+  ipType?: "datacenter" | "residential" | "unknown";
   pid: number;
   status: "idle" | "processing";
   startedAt: string;

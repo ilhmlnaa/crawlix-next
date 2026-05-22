@@ -9,6 +9,7 @@ import {
   Clock,
   Terminal,
   ShieldCheck,
+  Globe,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,6 +143,18 @@ export function WorkersPage() {
                     color="text-rose-400"
                   />
                   <MetaItem icon={Terminal} label="PID" value={worker.pid} />
+                  <MetaItem
+                    icon={Globe}
+                    label="IP Type"
+                    value={worker.ipType ?? "unknown"}
+                    color={
+                      worker.ipType === "residential"
+                        ? "text-emerald-400"
+                        : worker.ipType === "datacenter"
+                          ? "text-amber-400"
+                          : "text-slate-400"
+                    }
+                  />
                   <MetaItem
                     icon={Clock}
                     label="Strategies"
