@@ -1,3 +1,4 @@
+import { ProxyAgent, fetch as undiciFetch } from "undici";
 import {
   getWorkerRuntimeConfig,
   type ScraperRuntimeConfig,
@@ -446,14 +447,29 @@ async function executeHttpFetch(
   const controller = new AbortController();
   const timeoutMs = readTimeout(options, context.config);
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const proxyUrl = resolveProxyUrl(
+    job.options,
+    context.config,
+    context.proxyRuntime,
+  );
+  const proxyAgent = proxyUrl ? new ProxyAgent(proxyUrl) : undefined;
+  const requestInit: Parameters<typeof undiciFetch>[1] = {
+    method: options.method ?? "GET",
+    headers: buildHeaders(options, context.config) as Record<string, string>,
+    body: buildBody(options) as string | undefined,
+    signal: controller.signal,
+  };
+  if (proxyAgent) {
+    (requestInit as Record<string, unknown>).dispatcher = proxyAgent;
+  }
+  const resolvedMethod = proxyUrl
+    ? methodLabel === "http-direct"
+      ? "http-proxy"
+      : `${methodLabel}-proxy`
+    : methodLabel;
 
   try {
-    const response = await fetch(job.url, {
-      method: options.method ?? "GET",
-      headers: buildHeaders(options, context.config),
-      body: buildBody(options),
-      signal: controller.signal,
-    });
+    const response = await undiciFetch(job.url, requestInit);
 
     const content = await response.text();
     await context.onStageChange("extracting", 85);
@@ -468,7 +484,7 @@ async function executeHttpFetch(
         success: false,
         content,
         contentType: response.headers.get("content-type") ?? "text/plain",
-        method: methodLabel,
+        method: resolvedMethod,
         responseTimeMs: Date.now() - startedAt,
         error: `Upstream request failed with status ${response.status}`,
       };
@@ -478,7 +494,7 @@ async function executeHttpFetch(
       success: true,
       content,
       contentType: response.headers.get("content-type") ?? "text/plain",
-      method: methodLabel,
+      method: resolvedMethod,
       responseTimeMs: Date.now() - startedAt,
     };
   } catch (error) {
@@ -489,12 +505,15 @@ async function executeHttpFetch(
       success: false,
       content: "",
       contentType: "text/plain",
-      method: methodLabel,
+      method: resolvedMethod,
       responseTimeMs: Date.now() - startedAt,
       error: message,
     };
   } finally {
     clearTimeout(timeout);
+    if (proxyAgent) {
+      void proxyAgent.close().catch(() => undefined);
+    }
   }
 }
 

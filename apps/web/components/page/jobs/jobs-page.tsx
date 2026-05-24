@@ -532,6 +532,10 @@ export function JobsPage() {
                     className="capitalize"
                   />
                   <InfoBox
+                    label="Execution Method"
+                    value={selectedResult?.method ?? "—"}
+                  />
+                  <InfoBox
                     label="Proxy"
                     value={proxyEnabled ? "Enabled" : "Disabled"}
                   />
